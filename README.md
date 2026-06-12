@@ -1,6 +1,7 @@
 # Akıllı Sepet — Akıllı Fiyat Karşılaştırma & SKT İhbar Platformu
 
-> Gerçek zamanlı market fiyat karşılaştırması, son kullanma tarihi (SKT) ihbar sistemi ve AI destekli alışveriş asistanı. Mezuniyet Projesi — BLGM405/406.
+> Gerçek zamanlı market fiyat karşılaştırması, son kullanma tarihi (SKT) ihbar sistemi ve AI destekli alışveriş asistanı.
+> Alperen İVAK
 
 ---
 
