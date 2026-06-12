@@ -1,0 +1,4 @@
+/* NativeWind global CSS - Metro bundler bu dosyayi isleme alir */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

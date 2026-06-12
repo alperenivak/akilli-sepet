@@ -1,0 +1,96 @@
+{
+  "info": {
+    "name": "Akıllı Sepet API",
+    "description": "Temel API akışları — auth, ürünler, fiyatlar, sepet",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001/api" },
+    { "key": "accessToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth — Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"kullanici@marketapp.com\",\n  \"password\": \"User123!\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "const token = json.data?.accessToken || json.accessToken;",
+              "if (token) pm.collectionVariables.set('accessToken', token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products — List",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/products?limit=10&isActive=true"
+      }
+    },
+    {
+      "name": "Products — Detail",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/products/{{productId}}"
+      }
+    },
+    {
+      "name": "Prices — Product Prices",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/prices/product/{{productId}}"
+      }
+    },
+    {
+      "name": "Prices — Feedback",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"marketId\": \"{{marketId}}\",\n  \"isCorrect\": true\n}"
+        },
+        "url": "{{baseUrl}}/prices/feedback"
+      }
+    },
+    {
+      "name": "Prices — Create Alert",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"targetAmount\": 1999\n}"
+        },
+        "url": "{{baseUrl}}/prices/alerts"
+      }
+    },
+    {
+      "name": "Cart — Get",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/carts"
+      }
+    }
+  ]
+}

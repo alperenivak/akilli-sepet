@@ -1,0 +1,60 @@
+---
+description: Teknoloji yığınını koru — onaysız yeni kütüphane veya mimari değişiklik yapma
+alwaysApply: true
+---
+
+# Teknoloji Yığını Kilidi
+
+Bu proje aşağıdaki teknoloji yığınını kullanır. **Kullanıcı açıkça onay vermeden** yeni kütüphane eklenemez, mevcut teknoloji değiştirilemez veya mimari katman eklenmez.
+
+## Onaylı Teknoloji Yığını
+
+### Backend
+- **Framework:** NestJS 11 (TypeScript)
+- **ORM:** Prisma 5 + PostgreSQL 16
+- **Cache / Queue:** Redis + BullMQ (`@nestjs/bull`)
+- **Auth:** JWT — `@nestjs/jwt`, `passport-jwt`
+- **Dosya Depolama:** MinIO (AWS S3 SDK)
+- **Push Bildirim:** Firebase Admin SDK
+- **AI:** OpenAI SDK + `@google/generative-ai` (Gemini)
+- **HTTP:** Axios
+- **Validation:** `class-validator` + `class-transformer`
+- **Docs:** `@nestjs/swagger`
+
+### Admin Paneli
+- **Framework:** Next.js 15 (App Router)
+- **Stil:** Tailwind CSS
+- **HTTP:** Axios (merkezi `lib/api.ts` üzerinden)
+
+### Mobil Uygulama
+- **Framework:** React Native + Expo SDK 55
+- **Routing:** Expo Router
+- **State:** Zustand
+- **Data Fetching:** React Query (`@tanstack/react-query`)
+- **HTTP:** Axios
+- **Icons:** `@expo/vector-icons` (Ionicons)
+- **Storage:** `expo-secure-store`
+- **Kamera:** `expo-camera`
+- **Konum:** `expo-location`
+
+### Altyapı
+- **Container:** Docker Compose
+- **Veritabanı:** PostgreSQL 16
+- **Cache:** Redis
+
+## Yasak Değişiklikler
+
+- ❌ Yeni state management kütüphanesi (Redux, Jotai, MobX vb.) ekleme
+- ❌ ORM değişikliği (TypeORM, Drizzle vb.)
+- ❌ Next.js Pages Router'a geçiş
+- ❌ Expo'dan bare React Native'e geçiş
+- ❌ REST yerine GraphQL katmanı ekleme
+- ❌ `npm install <yeni-paket>` — kullanıcı onayı olmadan
+
+## Onay Gerektiren Durumlar
+
+Eğer bir görevi yerine getirmek için yığın dışına çıkmak **zorunlu** görünüyorsa:
+1. Bunu kullanıcıya açıkça belirt
+2. Neden gerekli olduğunu kısaca açıkla
+3. Alternatif mevcut teknolojilerle çözüm üret (mümkünse)
+4. Kullanıcı onayını bekle

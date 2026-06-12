@@ -1,0 +1,39 @@
+﻿// =====================================================
+// Akıllı Sepet - JWT Kimlik Dogrulama Guard'i
+// Her korunan endpoint'te JWT token dogrulamasi yapar
+// =====================================================
+
+import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Reflector } from '@nestjs/core';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+
+@Injectable()
+export class JwtAuthGuard extends AuthGuard('jwt') {
+  constructor(private reflector: Reflector) {
+    super();
+  }
+
+  canActivate(context: ExecutionContext) {
+    // @Public() ile isaretlenmis endpoint'ler JWT dogrulamasi gerektirmez
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return true;
+    }
+
+    return super.canActivate(context);
+  }
+
+  handleRequest<TUser = any>(err: Error | null, user: TUser): TUser {
+    if (err || !user) {
+      throw new UnauthorizedException(
+        'Bu islemi gerceklestirmek icin giris yapmaniz gerekiyor.',
+      );
+    }
+    return user as TUser;
+  }
+}

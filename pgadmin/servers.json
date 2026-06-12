@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Akıllı Sepet - marketapp",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "marketapp",
+      "Username": "postgres",
+      "Password": "123456",
+      "SSLMode": "prefer",
+      "SavePassword": true
+    }
+  }
+}

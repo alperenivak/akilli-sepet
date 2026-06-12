@@ -1,0 +1,14 @@
+﻿{
+  "name": "@Akıllı Sepet/shared",
+  "version": "1.0.0",
+  "description": "Akıllı Sepet paylasilan tipler, sabitler ve dogrulayicilar",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src/"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

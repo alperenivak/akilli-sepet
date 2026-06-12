@@ -1,0 +1,791 @@
+// =====================================================
+// MarketApp - Prisma Veritabani Semasi
+// PostgreSQL iliskisel veritabani modeli
+// Tum varliklar, iliskiler ve kisitlamalar burada tanimlanmistir
+// =====================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// KULLANICI VE YETKİLENDİRME
+// =====================================================
+
+// Kullanici rolleri - sistem genelinde yetki seviyelerini belirler
+enum UserRole {
+  SUPER_ADMIN    // Tam yetkili sistem yoneticisi
+  ADMIN          // Genel yonetici
+  INSPECTOR      // Kurum denetcisi (ornegin: belediye, bakanlik)
+  MARKET_MANAGER // Market yoneticisi (kendi marketinin fiyatlarini girebilir)
+  USER           // Normal kullanici
+}
+
+// Kullanici tablosu - uygulamanin tum kullanicilari
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String    // bcrypt ile hash'lenmis sifre
+  name          String
+  surname       String
+  phone         String?
+  role          UserRole  @default(USER)
+  isActive      Boolean   @default(true)
+  avatarUrl     String?
+  fcmToken      String?   // Firebase Cloud Messaging bildirimleri icin
+  refreshToken  String?   // JWT refresh token (hash'lenmis)
+  bannedUntil     DateTime? // Gecici ban bitis tarihi (null = ban yok / kalici ban)
+  banReason       String?   // Ban sebebi
+  isPermanentBan  Boolean   @default(false) // Kalici ban bayragi
+  emailVerified   Boolean   @default(false) // E-posta OTP dogrulamasi
+
+  // Market yoneticisi ise hangi marketi yonettigi
+  managedMarketId String?
+  managedMarket   Market? @relation("MarketManagers", fields: [managedMarketId], references: [id])
+
+  // Kullanici itibar skoru — dogru fiyat bildirimleri ile artar (0.0 - 5.0)
+  reputationScore Float     @default(1.0)
+
+  // Iliskiler
+  carts            Cart[]
+  reports          Report[]
+  reviewedReports  Report[]      @relation("ReportReviewer")
+  pushedReports    Report[]      @relation("ReportPushed")
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  aiRecommendations AIRecommendation[]
+  priceFeedbacks   PriceFeedback[]
+  priceAlerts      PriceAlert[]
+  priceSubmissions    PriceSubmission[] @relation("SubmissionReporter")
+  reviewedSubmissions PriceSubmission[] @relation("SubmissionReviewer")
+  reputationEvents    ReputationEvent[]
+  rewardClaims        UserRewardClaim[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// E-posta dogrulama kodlari (kayit + sifre sifirlama)
+model EmailOtp {
+  id        String    @id @default(cuid())
+  email     String
+  codeHash  String    // bcrypt hash — duz metin saklanmaz
+  purpose   String    // REGISTER | PASSWORD_RESET
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([email, purpose])
+  @@index([expiresAt])
+  @@map("email_otps")
+}
+
+// =====================================================
+// URUN VE KATEGORİ
+// =====================================================
+
+// Urun kategorileri - hiyerarsik yapi desteklenir
+model Category {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  icon        String?    // Emoji veya icon adi
+  description String?
+  imageUrl    String?
+  parentId    String?
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  products    Product[]
+  
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("categories")
+}
+
+// Urun tablosu - marketsiz genel urun bilgileri
+model Product {
+  id          String    @id @default(cuid())
+  name        String
+  brand       String?
+  description String?
+  imageUrl    String?
+  unit        String?   // kg, litre, adet, ml, g vs.
+  unitValue   Float?    // 1.5 (1.5 litre icin)
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id])
+  
+  // SEO ve arama
+  slug        String?   @unique
+  keywords    String[]  @default([])
+  
+  // Iliskiler
+  barcodes         Barcode[]
+  prices           Price[]
+  cartItems        CartItem[]
+  reports          Report[]
+  priceAlerts      PriceAlert[]
+  priceSubmissions PriceSubmission[]
+  
+  isActive    Boolean   @default(true)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([name])
+  @@index([brand])
+  @@index([categoryId])
+  @@map("products")
+}
+
+// Barkod tablosu - bir ürünün birden fazla barkodu olabilir
+model Barcode {
+  id        String        @id @default(cuid())
+  code      String        @unique // EAN-13, EAN-8 vs. barkod degeri
+  format    BarcodeFormat @default(EAN_13)
+  productId String
+  product   Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime      @default(now())
+
+  @@index([code])
+  @@map("barcodes")
+}
+
+enum BarcodeFormat {
+  EAN_13
+  EAN_8
+  UPC_A
+  QR_CODE
+  CODE_128
+  CODE_39
+  UNKNOWN
+}
+
+// =====================================================
+// MARKET VE ŞUBE
+// =====================================================
+
+// Scraper tipi — market veri kaynagi
+enum ScraperType {
+  SITEMAP_HTML  // sitemap.xml + cheerio HTML kazima
+  MIGROS_API    // Migros Sanal Market REST API (acik endpoint)
+}
+
+// Market tablosu - zincir market markalari (Migros, BİM, A101 vs.)
+model Market {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  logoUrl     String?
+  brandColor  String?  // Marka rengi (#RRGGBB)
+  website        String?
+  description    String?
+  sitemapUrl     String?  // Urun sitemap.xml adresi (scraper icin)
+  scraperEnabled Boolean  @default(false)
+  scraperType    ScraperType? @default(SITEMAP_HTML)
+  scraperNameSelector  String?  // cheerio urun adi secicisi (orn. .product-name)
+  scraperPriceSelector String?  // cheerio fiyat secicisi (orn. .product-price)
+  scraperUrlPattern    String?  // sitemap <loc> URL filtresi (orn. /urun/)
+
+  // Iliskiler
+  branches         MarketBranch[]
+  prices           Price[]
+  catalogs         Catalog[]
+  reports          Report[]
+  managers         User[]   @relation("MarketManagers")
+  priceAlerts      PriceAlert[]
+  cartItems        CartItem[]
+  priceSubmissions PriceSubmission[]
+  partnerRewards   CommunityReward[]
+  
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("markets")
+}
+
+// Market subesi - her marketin sehir/ilce bazinda subeleri
+model MarketBranch {
+  id           String   @id @default(cuid())
+  marketId     String
+  market       Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  name         String   // Sube adi (ornegin: "Migros Kadikoy")
+  address      String
+  city         String
+  district     String?
+  postalCode   String?
+  latitude     Float?
+  longitude    Float?
+  phone        String?
+  workingHours String?
+  
+  reports      Report[]
+  
+  isActive     Boolean  @default(true)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([marketId])
+  @@index([city, district])
+  @@map("market_branches")
+}
+
+// =====================================================
+// FİYAT VE FİYAT GEÇMİŞİ
+// =====================================================
+
+// Fiyat kaynagi - verinin nasil elde edildigini belirtir
+enum PriceSource {
+  SCRAPER        // Otomatik web kazima ile
+  MANUAL_ADMIN   // Admin tarafindan manuel giris
+  MARKET_PANEL   // Market yoneticisi panelinden
+  CROWDSOURCE    // Kullanici bildirimi
+  API            // Harici API entegrasyonu
+}
+
+// Guncel fiyat tablosu - bir urunun bir marketteki guncel fiyati
+model Price {
+  id               String      @id @default(cuid())
+  productId        String
+  product          Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  marketId         String
+  market           Market      @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  
+  amount           Int         // Kurus cinsinden (29.99 TL = 2999)
+  discountedAmount Int?        // Indirimli fiyat (kurus), yoksa null
+  currency         String      @default("TRY")
+  
+  isAvailable        Boolean     @default(true)
+  source             PriceSource @default(MANUAL_ADMIN)
+  needsVerification  Boolean     @default(false) // Eski veya dogrulanmamis fiyat isareti
+
+  // Katmanli guvenilirlik sistemi
+  isSeedData       Boolean     @default(false)  // dummy seed verisi isaretcisi
+  confidenceScore  Float       @default(1.0)    // 0.0-1.0 arasi guven skoru
+
+  priceHistory     PriceHistory[]
+  feedbacks        PriceFeedback[]
+  submissions      PriceSubmission[]
+  
+  lastUpdated      DateTime    @default(now())
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@unique([productId, marketId]) // Her urunun her markette tek fiyat kaydı
+  @@index([productId])
+  @@index([marketId])
+  @@index([amount])
+  @@index([lastUpdated])
+  @@map("prices")
+}
+
+// Fiyat gecmisi - fiyat degisimlerini kayit altina alir
+model PriceHistory {
+  id          String      @id @default(cuid())
+  priceId     String
+  price       Price       @relation(fields: [priceId], references: [id], onDelete: Cascade)
+  amount      Int         // O zamanki fiyat (kurus)
+  source      PriceSource @default(SCRAPER)
+  recordedAt  DateTime    @default(now())
+
+  @@index([priceId])
+  @@index([recordedAt])
+  @@map("price_history")
+}
+
+// Fiyat geri bildirimi - kullanicilarin fiyat dogruluk bildirimleri
+model PriceFeedback {
+  id        String   @id @default(cuid())
+  priceId   String
+  price     Price    @relation(fields: [priceId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  isCorrect Boolean  // Fiyat dogru mu?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, priceId])
+  @@map("price_feedbacks")
+}
+
+// Itibar olay turleri — fiyat dogrulama ve bildirim birlesik sistemi
+enum ReputationEventType {
+  VERIFY_CORRECT       // Basparmak yukari — fiyat dogru
+  VERIFY_INCORRECT     // Basparmak asagi — fiyat yanlis
+  SUBMIT_PRICE         // Yeni fiyat bildirimi
+  SUBMIT_APPROVED      // Admin / otomatik onay
+  SUBMIT_REJECTED      // Admin reddi
+  SUBMIT_AUTO_APPROVED // Topluluk konsensusu (5+ bildirim)
+}
+
+// Itibar gecmisi — kullaniciya gosterilecek aktivite akisi
+model ReputationEvent {
+  id          String              @id @default(cuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        ReputationEventType
+  points      Float               // Bu olaydaki itibar degisimi (+/-)
+  scoreAfter  Float               // Olay sonrasi toplam skor
+  title       String              // Kullaniciya gosterilen baslik
+  description String?
+  metadata    Json?               // productId, marketId vb.
+
+  createdAt   DateTime            @default(now())
+
+  @@index([userId, createdAt])
+  @@map("reputation_events")
+}
+
+// =====================================================
+// TOPLULUK ÖDÜLLERİ — İtibar karşılığı anlaşmalı market kuponları
+// =====================================================
+
+enum RewardCodeMode {
+  MANUAL  // Yalnızca admin/market havuzundan
+  AUTO    // Talep anında otomatik üret
+  HYBRID  // Önce havuz, yoksa otomatik üret
+}
+
+enum RewardCodeSource {
+  MANUAL
+  AUTO
+}
+
+model CommunityReward {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  title         String
+  description   String
+  benefitText   String
+  discountLabel String
+  minReputation Float
+  levelLabel    String
+  levelIcon     String
+  instructions  String?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+
+  codeMode        RewardCodeMode @default(HYBRID)
+  codePrefix      String?        @default("AKS")
+  autoExpiresDays Int            @default(30)
+
+  marketId      String?
+  market        Market?  @relation(fields: [marketId], references: [id], onDelete: SetNull)
+
+  codes         RewardCouponCode[]
+  claims        UserRewardClaim[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([minReputation])
+  @@index([isActive])
+  @@map("community_rewards")
+}
+
+model RewardCouponCode {
+  id        String   @id @default(cuid())
+  rewardId  String
+  reward    CommunityReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  code      String   @unique
+  isUsed    Boolean  @default(false)
+  source    RewardCodeSource @default(MANUAL)
+  generatedForUserId String?
+  expiresAt DateTime?
+
+  claim     UserRewardClaim?
+
+  createdAt DateTime @default(now())
+
+  @@index([rewardId, isUsed])
+  @@map("reward_coupon_codes")
+}
+
+model UserRewardClaim {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rewardId  String
+  reward    CommunityReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  codeId    String   @unique
+  code      RewardCouponCode @relation(fields: [codeId], references: [id])
+
+  claimedAt DateTime @default(now())
+
+  @@unique([userId, rewardId])
+  @@index([userId])
+  @@map("user_reward_claims")
+}
+
+// Fiyat uyarısı — hedef fiyatın altına düşünce bildirim
+model PriceAlert {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  marketId     String?
+  market       Market?   @relation(fields: [marketId], references: [id])
+  targetAmount Int       // Kurus — bu fiyatın altına düşünce uyar
+  isActive     Boolean   @default(true)
+  triggeredAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, productId])
+  @@index([userId, isActive])
+  @@index([productId])
+  @@map("price_alerts")
+}
+
+// Crowdsource fiyat bildirimi durumu
+enum SubmissionStatus {
+  PENDING    // Beklemede
+  APPROVED   // Onaylandi
+  REJECTED   // Reddedildi
+}
+
+// Crowdsource fiyat bildirimi - kullanicilarin bildirdigi market fiyatlari
+model PriceSubmission {
+  id           String           @id @default(cuid())
+
+  // Hangi urun, hangi market
+  productId    String
+  product      Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  marketId     String
+  market       Market           @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  // Bildiren kullanici (anonim olabilir)
+  userId       String?
+  user         User?            @relation("SubmissionReporter", fields: [userId], references: [id])
+
+  // Fiyat ve not
+  amount       Int              // Kurus cinsinden (29.99 TL = 2999)
+  note         String?
+
+  // Hangi Price kaydina bagli (upsert sonrasi)
+  priceId      String?
+  price        Price?           @relation(fields: [priceId], references: [id])
+
+  // Admin onay akisi
+  status       SubmissionStatus @default(PENDING)
+  adminNote    String?
+  reviewedById String?
+  reviewedBy   User?            @relation("SubmissionReviewer", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+
+  // Anormallik bayragi: Migros referansina gore 2x fazla veya 1/3 den az
+  isAbnormal   Boolean          @default(false)
+
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([productId, marketId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("price_submissions")
+}
+
+// =====================================================
+// SEPET
+// =====================================================
+
+// Sepet tablosu - kullanicinin alisveris sepeti
+model Cart {
+  id         String     @id @default(cuid())
+  userId     String?    // Giris yapan kullanici (opsiyonel)
+  user       User?      @relation(fields: [userId], references: [id])
+  sessionId  String?    // Giris yapmamis kullanicinin oturum ID'si
+  name       String?    // Sepet adi (opsiyonel, birdenfazla sepet icin)
+  
+  items      CartItem[]
+  
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([userId])
+  @@index([sessionId])
+  @@map("carts")
+}
+
+// Sepet kalemi - her urun hangi marketten eklendigini tutar
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  marketId  String
+  market    Market   @relation(fields: [marketId], references: [id])
+  unitPrice Int?     // Ekleme anindaki birim fiyat (kurus)
+  quantity  Int      @default(1)
+  
+  addedAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId, marketId])
+  @@index([marketId])
+  @@map("cart_items")
+}
+
+// =====================================================
+// İHBAR (TARİHİ GEÇMİŞ ÜRÜN)
+// =====================================================
+
+// Ihbar durumu
+enum ReportStatus {
+  PENDING       // Beklemede - yeni oluşturuldu
+  UNDER_REVIEW  // İnceleniyor - yetkili tarafindan bakiliyor
+  APPROVED      // Onaylandi - ihbar gecerli kabul edildi
+  REJECTED      // Reddedildi - sahte/hatali ihbar
+  RESOLVED      // Cozumlendi - gerekli islem yapildi
+}
+
+// Ihbar tablosu - kullanicilarin bildirdigi tarihi gecmis urunler
+model Report {
+  id           String       @id @default(cuid())
+  
+  // Bildiren kullanici bilgileri
+  userId       String?
+  user         User?        @relation(fields: [userId], references: [id])
+  isAnonymous  Boolean      @default(false)
+  
+  // Urun bilgileri
+  productId    String?
+  product      Product?     @relation(fields: [productId], references: [id])
+  barcodeCode  String?      // Urun sistemde yoksa ham barkod
+  
+  // Market/Sube bilgileri
+  marketId         String?
+  market           Market?       @relation(fields: [marketId], references: [id])
+  branchId         String?
+  branch           MarketBranch? @relation(fields: [branchId], references: [id])
+  marketNameOther  String?       // Listede yoksa kullanicinin yazdigi market adi
+
+  // Denetci markete iletimi
+  pushedToMarketAt DateTime?
+  pushedById       String?
+  pushedBy         User?         @relation("ReportPushed", fields: [pushedById], references: [id])
+  
+  // Ihbar detaylari
+  description  String       // Kullanicinin aciklamasi
+  expiryDate   DateTime?    // Bildirilen son kullanma tarihi
+  
+  // Konum bilgileri
+  latitude     Float?
+  longitude    Float?
+  address      String?
+  city         String?
+  district     String?
+  
+  // Durum ve inceleme
+  status       ReportStatus @default(PENDING)
+  userNote     String?      // Kullaniciya gosterilen yanit notu (durum guncellemesi)
+  marketNote   String?      // Market yoneticisine iletilen not (push-to-market)
+  reviewedById String?      // Incelemeyi yapan yetkili
+  reviewedBy   User?        @relation("ReportReviewer", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  
+  // Gorseller
+  images       ReportImage[]
+  
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([status])
+  @@index([status, createdAt])
+  @@index([userId])
+  @@index([marketId])
+  @@map("reports")
+}
+
+// Ihbar gorseli - ihbara eklenen fotograflar
+model ReportImage {
+  id           String   @id @default(cuid())
+  reportId     String
+  report       Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  url          String   // S3/MinIO URL
+  thumbnailUrl String?  // Kucuk boy thumbnail URL
+  fileName     String
+  fileSize     Int      // Byte cinsinden
+  
+  uploadedAt   DateTime @default(now())
+
+  @@map("report_images")
+}
+
+// =====================================================
+// AKTÜEL KATALOGLAR
+// =====================================================
+
+// Katalog tablosu - market aktuel/indirim dergileri
+model Catalog {
+  id           String        @id @default(cuid())
+  marketId     String
+  market       Market        @relation(fields: [marketId], references: [id])
+  title        String
+  description  String?
+  coverImageUrl String?
+  startDate    DateTime
+  endDate      DateTime
+  pageCount    Int           @default(0)
+  sourceUrl    String?       // Scraper'dan gelen kaynak URL
+  pdfUrl       String?       // Dogrudan PDF linki (varsa)
+  scrapeSource String?       // 'manual' | 'scraper'
+
+  pages        CatalogPage[]
+
+  isActive     Boolean       @default(true)
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([marketId])
+  @@index([startDate, endDate])
+  @@map("catalogs")
+}
+
+// Katalog sayfasi - katalogdaki her sayfa
+model CatalogPage {
+  id           String   @id @default(cuid())
+  catalogId    String
+  catalog      Catalog  @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  pageNumber   Int
+  imageUrl     String   // Tam boyut gorsel URL
+  thumbnailUrl String?  // Kucuk boy gorsel URL
+  
+  createdAt    DateTime @default(now())
+
+  @@unique([catalogId, pageNumber])
+  @@map("catalog_pages")
+}
+
+// =====================================================
+// BİLDİRİMLER
+// =====================================================
+
+enum NotificationType {
+  PRICE_DROP         // Fiyat dustu - kullanicinin takip ettigi urun
+  PRICE_ALERT        // Fiyat alarmi - hedef fiyata ulasti
+  REPORT_STATUS      // Ihbar durumu degisti
+  NEW_CATALOG        // Yeni aktuel katalog
+  AI_RECOMMENDATION  // AI onerisi
+  SYSTEM             // Sistem bildirimi
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  type      NotificationType
+  data      Json?            // Ek veri (urun ID, market ID vs.)
+  isRead    Boolean          @default(false)
+  
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// =====================================================
+// AI ÖNERİLER
+// =====================================================
+
+model AIRecommendation {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  type        String   // AIRecommendationType degerleri
+  title       String
+  description String
+  data        Json?    // AI tarafindan uretilen oneri verisi
+  score       Float?   // Oneri guven skoru (0-1)
+  expiresAt   DateTime?
+  
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@map("ai_recommendations")
+}
+
+// =====================================================
+// SISTEM LOGLAR
+// =====================================================
+
+// Denetim logu - onemli sistem eylemlerini kayit altina alir
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String   // Yapilan islem (ornegin: APPROVE_REPORT, UPDATE_PRICE)
+  entityType String?  // Etkilenen varlik turu (Report, Price, Product vs.)
+  entityId   String?  // Etkilenen varlik ID'si
+  oldData    Json?    // Onceki durum
+  newData    Json?    // Yeni durum
+  ipAddress  String?
+  userAgent  String?
+  
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Kazima (scraper) izleme - geriye uyumluluk (eski kayitlar)
+model ScraperLog {
+  id          String   @id @default(cuid())
+  source      String   // Kaynak URL veya site adi
+  status      String   // success, failed, partial
+  recordsFound Int     @default(0)
+  recordsUpdated Int   @default(0)
+  errorMessage String?
+  duration    Int?     // Milisaniye cinsinden
+  
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@map("scraper_logs")
+}
+
+// Veri senkronizasyonu izleme - import, bakim ve gelecekteki saglayicilar
+model DataSyncLog {
+  id             String   @id @default(cuid())
+  jobType        String   // PRICE_IMPORT, STALE_CHECK, CATALOG_EXPIRE, PRODUCT_SYNC
+  provider       String   // MANUAL_IMPORT, MARKET_PANEL, EXTERNAL_API, OPEN_DATA
+  status         String   // pending, success, failed, partial, skipped
+  recordsTotal   Int      @default(0)
+  recordsSuccess Int      @default(0)
+  recordsFailed  Int      @default(0)
+  errorMessage   String?
+  metadata       Json?
+  startedAt      DateTime @default(now())
+  completedAt    DateTime?
+
+  @@index([jobType])
+  @@index([startedAt])
+  @@map("data_sync_logs")
+}

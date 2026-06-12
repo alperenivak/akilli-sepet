@@ -1,0 +1,26 @@
+---
+description: README.md'yi proje değişikliklerine göre otomatik güncelle
+alwaysApply: true
+---
+
+# README Senkronizasyonu
+
+`README.md` projenin canlı dökümantasyonudur. Aşağıdaki durumlarda **mutlaka** güncelle:
+
+## Güncelleme Gerektiren Değişiklikler
+
+- Yeni ekran / sayfa eklendi → **Ekran Haritası** bölümünü güncelle
+- Yeni API endpoint veya modül eklendi → **API Dökümantasyonu** bölümünü güncelle
+- Yeni npm paketi / teknoloji eklendi → **Teknoloji Yığını** tablosunu güncelle
+- Yeni özellik implement edildi → **Özellikler** tablosuna ekle
+- Env değişkeni eklendi/kaldırıldı → **Ortam Değişkenleri** tablosunu güncelle
+- Kullanıcı rolü veya seed verisi değişti → **Demo Verileri** bölümünü güncelle
+- Mimari değişiklik yapıldı → **Mimari** bölümünü güncelle
+- Dizin yapısı değişti → **Proje Yapısı** bölümünü güncelle
+
+## Güncelleme Kuralları
+
+- README'yi sadece gerçekten değişen bölümleri güncelle; diğer bölümlere dokunma
+- Teknik gerçekliği yansıt — var olmayan özelliği yazma
+- Port numaraları, URL'ler, paket adları doğru olmalı
+- Tablo formatını koru (Markdown tabloları)

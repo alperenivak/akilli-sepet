@@ -1,0 +1,20 @@
+# IDE-specific folders (auto-created locally, not shared)
+.cursor/
+
+node_modules/
+dist/
+.next/
+.expo/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+Thumbs.db
+backups/
+coverage/
+.nyc_output/
+prisma/migrations/
+*.tsbuildinfo
+android/
+ios/

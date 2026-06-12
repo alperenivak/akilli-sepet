@@ -1,0 +1,29 @@
+﻿{
+    "name": "Akıllı Sepet-monorepo",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Supermarketlerde Mobil Fiyat Karsilastirma, Sepet Optimizasyonu ve Tarihi Gecmis Urun Ihbar Sistemi",
+    "workspaces": [
+        "backend",
+        "admin-panel",
+        "shared"
+    ],
+    "scripts": {
+        "backend": "pnpm --filter backend start:dev",
+        "mobile": "npm run start --prefix mobile",
+        "mobile:tunnel": "npm run start --prefix mobile -- --tunnel --clear",
+        "admin": "pnpm --filter admin-panel dev",
+        "dev": "concurrently \"npm run backend\" \"npm run admin\"",
+        "build:backend": "pnpm --filter backend build",
+        "build:admin": "pnpm --filter admin-panel build",
+        "lint": "pnpm --recursive lint",
+        "format": "pnpm --recursive format"
+    },
+    "devDependencies": {
+        "concurrently": "^9.2.1"
+    },
+    "engines": {
+        "node": ">=18.0.0",
+        "pnpm": ">=8.0.0"
+    }
+}

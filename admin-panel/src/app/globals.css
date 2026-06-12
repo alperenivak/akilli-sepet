@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/* === Temel body (giriş ekranı için) === */
+body {
+  background: #f8fafc;
+  color: #171717;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* === Panel shell — tema değişkenlerine göre === */
+.panel-root {
+  min-height: 100vh;
+  transition: background 0.25s, color 0.25s;
+}
+
+/* Gündüz modu (varsayılan) */
+.panel-root {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* Gece modu */
+html.dark-mode .panel-root {
+  background: #0d1526;
+  color: #e2e8f0;
+}
+
+/* === Yüzen kart === */
+.fp-card {
+  border-radius: 14px;
+  transition: background 0.25s, border-color 0.25s;
+}
+
+.panel-root .fp-card {
+  background: #ffffff;
+  border: 1px solid rgba(15,23,42,0.08);
+}
+
+html.dark-mode .panel-root .fp-card {
+  background: #162035;
+  border: 1px solid rgba(148,163,184,0.12);
+}
+
+/* === Hafif glow efektleri === */
+.glow-blue  { box-shadow: 0 4px 20px rgba(59,130,246,0.18); }
+.glow-amber { box-shadow: 0 4px 20px rgba(245,158,11,0.18); }
+.glow-green { box-shadow: 0 4px 20px rgba(16,185,129,0.18); }
+.glow-red   { box-shadow: 0 4px 20px rgba(239,68,68,0.18); }
