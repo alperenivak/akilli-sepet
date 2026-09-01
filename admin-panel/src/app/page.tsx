@@ -18,6 +18,21 @@ interface Portal {
   allowedRoles: UserRole[];
 }
 
+const DEMO_CREDENTIALS: Record<'admin' | 'inspector', { email: string; password: string }> = {
+  admin: { email: 'admin@marketapp.com', password: 'Admin123!' },
+  inspector: { email: 'denetci@marketapp.com', password: 'Admin123!' },
+};
+
+/** Seed ile uyumlu market yönetici demo hesapları */
+const MARKET_DEMO_MANAGERS = [
+  { id: 'migros', name: 'Migros', email: 'yonetici@migros.com', password: 'yonetici123' },
+  { id: 'a101', name: 'A101', email: 'yonetici@a101.com', password: 'yonetici123' },
+  { id: 'bim', name: 'BİM', email: 'yonetici@bim.com', password: 'yonetici123' },
+  { id: 'sok', name: 'Şok Market', email: 'yonetici@sokmarket.com', password: 'yonetici123' },
+  { id: 'carrefoursa', name: 'CarrefourSA', email: 'yonetici@carrefoursa.com', password: 'yonetici123' },
+  { id: 'macrocenter', name: 'Macrocenter', email: 'yonetici@macrocenter.com', password: 'yonetici123' },
+] as const;
+
 const PORTALS: Portal[] = [
   {
     id: 'admin',
@@ -57,6 +72,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedMarketDemo, setSelectedMarketDemo] = useState<string>(MARKET_DEMO_MANAGERS[0].id);
 
   // Sayfa açılınca eski oturum verilerini temizle — stale token yönlendirmesin
   useEffect(() => {
@@ -76,6 +92,14 @@ export default function LoginPage() {
     setError('');
     setEmail('');
     setPassword('');
+    setSelectedMarketDemo(MARKET_DEMO_MANAGERS[0].id);
+  };
+
+  const fillMarketDemo = () => {
+    const mgr = MARKET_DEMO_MANAGERS.find((m) => m.id === selectedMarketDemo);
+    if (!mgr) return;
+    setEmail(mgr.email);
+    setPassword(mgr.password);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -245,18 +269,104 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Demo giriş — yalnızca giriş adımında */}
+          {selectedPortal.id === 'market' ? (
+            <div
+              className="mb-5 p-4 rounded-xl"
+              style={{
+                backgroundColor: selectedPortal.color + '20',
+                border: `1px solid ${selectedPortal.color}`,
+              }}
+            >
+              <p
+                className="text-[11px] font-black uppercase tracking-widest mb-3"
+                style={{ color: selectedPortal.color }}
+              >
+                Demo Giriş
+              </p>
+              <label className="block text-xs text-gray-400 mb-1.5">Market seç</label>
+              <select
+                value={selectedMarketDemo}
+                onChange={(e) => setSelectedMarketDemo(e.target.value)}
+                className="w-full bg-gray-900/80 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm mb-3 focus:outline-none"
+                style={{ borderColor: selectedPortal.color + '50' }}
+              >
+                {MARKET_DEMO_MANAGERS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+              {(() => {
+                const mgr = MARKET_DEMO_MANAGERS.find((m) => m.id === selectedMarketDemo);
+                if (!mgr) return null;
+                return (
+                  <>
+                    <p className="text-sm text-white leading-relaxed">
+                      <span className="text-gray-400">E-posta:</span>{' '}
+                      <span className="font-semibold">{mgr.email}</span>
+                    </p>
+                    <p className="text-sm text-white leading-relaxed mt-1">
+                      <span className="text-gray-400">Şifre:</span>{' '}
+                      <span className="font-semibold">{mgr.password}</span>
+                    </p>
+                  </>
+                );
+              })()}
+              <button
+                type="button"
+                onClick={fillMarketDemo}
+                className="mt-3 w-full py-2 rounded-lg text-xs font-bold transition-opacity hover:opacity-90"
+                style={{
+                  backgroundColor: selectedPortal.color + '30',
+                  color: selectedPortal.color,
+                  border: `1px solid ${selectedPortal.color}60`,
+                }}
+              >
+                Demo bilgilerini doldur
+              </button>
+            </div>
+          ) : selectedPortal.id in DEMO_CREDENTIALS ? (
+            <div
+              className="mb-5 p-4 rounded-xl"
+              style={{
+                backgroundColor: selectedPortal.color + '20',
+                border: `1px solid ${selectedPortal.color}`,
+              }}
+            >
+              <p
+                className="text-[11px] font-black uppercase tracking-widest mb-2"
+                style={{ color: selectedPortal.color }}
+              >
+                Demo Giriş
+              </p>
+              <p className="text-sm text-white leading-relaxed">
+                <span className="text-gray-400">E-posta:</span>{' '}
+                <span className="font-semibold">{DEMO_CREDENTIALS[selectedPortal.id as 'admin' | 'inspector'].email}</span>
+              </p>
+              <p className="text-sm text-white leading-relaxed mt-1">
+                <span className="text-gray-400">Şifre:</span>{' '}
+                <span className="font-semibold">{DEMO_CREDENTIALS[selectedPortal.id as 'admin' | 'inspector'].password}</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  const demo = DEMO_CREDENTIALS[selectedPortal.id as 'admin' | 'inspector'];
+                  setEmail(demo.email);
+                  setPassword(demo.password);
+                }}
+                className="mt-3 w-full py-2 rounded-lg text-xs font-bold transition-opacity hover:opacity-90"
+                style={{
+                  backgroundColor: selectedPortal.color + '30',
+                  color: selectedPortal.color,
+                  border: `1px solid ${selectedPortal.color}60`,
+                }}
+              >
+                Demo bilgilerini doldur
+              </button>
+            </div>
+          ) : null}
+
           {/* Form */}
           <form onSubmit={handleLogin} className="space-y-4">
-            {selectedPortal.id === 'admin' && (
-              <p className="text-xs text-gray-500 leading-relaxed">
-                Demo: <span className="text-gray-400">admin@marketapp.com</span> / Admin123!
-              </p>
-            )}
-            {selectedPortal.id === 'inspector' && (
-              <p className="text-xs text-gray-500 leading-relaxed">
-                Demo: <span className="text-gray-400">denetci@marketapp.com</span> / Admin123!
-              </p>
-            )}
             {error && (
               <div className="bg-red-950/60 border border-red-700/50 text-red-300 px-4 py-3 rounded-xl text-sm flex items-start gap-2">
                 <span className="mt-0.5 flex-shrink-0">⚠</span>

@@ -14,6 +14,7 @@ import {
   getReputationLevel,
   levelProgressPercent,
   reputationTrustWeight,
+  resolveEffectiveReputationScore,
 } from './reputation.constants';
 
 interface AwardOptions {
@@ -125,9 +126,75 @@ export class ReputationService {
     });
   }
 
+  awardSubmitBarcode(userId: string, productName: string, barcode: string) {
+    return this.award({
+      userId,
+      type: ReputationEventType.SUBMIT_BARCODE,
+      points: REPUTATION_POINTS.SUBMIT_BARCODE,
+      title: 'Barkod katkısı gönderildi',
+      description: `${productName} — ${barcode}`,
+      metadata: { productName, barcode },
+    });
+  }
+
+  awardSubmitBarcodeApproved(userId: string, productName: string, barcode: string) {
+    return this.award({
+      userId,
+      type: ReputationEventType.SUBMIT_BARCODE_APPROVED,
+      points: REPUTATION_POINTS.SUBMIT_BARCODE_APPROVED,
+      title: 'Barkod katkın onaylandı!',
+      description: `${productName} — ${barcode}`,
+      metadata: { productName, barcode },
+    });
+  }
+
+  awardSubmitBarcodeRejected(userId: string, productName: string, barcode: string) {
+    return this.award({
+      userId,
+      type: ReputationEventType.SUBMIT_BARCODE_REJECTED,
+      points: REPUTATION_POINTS.SUBMIT_BARCODE_REJECTED,
+      title: 'Barkod katkısı reddedildi',
+      description: `${productName} — ${barcode}`,
+      metadata: { productName, barcode },
+    });
+  }
+
+  awardSubmitMarketListing(userId: string, productName: string, marketName: string) {
+    return this.award({
+      userId,
+      type: ReputationEventType.SUBMIT_MARKET_LISTING,
+      points: REPUTATION_POINTS.SUBMIT_MARKET_LISTING,
+      title: 'Markete ekleme talebi gönderildi',
+      description: `${productName} — ${marketName}`,
+      metadata: { productName, marketName },
+    });
+  }
+
+  awardSubmitMarketListingApproved(userId: string, productName: string, marketName: string) {
+    return this.award({
+      userId,
+      type: ReputationEventType.SUBMIT_MARKET_LISTING_APPROVED,
+      points: REPUTATION_POINTS.SUBMIT_MARKET_LISTING_APPROVED,
+      title: 'Ürün markete eklendi!',
+      description: `${productName} artık ${marketName} listesinde`,
+      metadata: { productName, marketName },
+    });
+  }
+
+  awardSubmitMarketListingRejected(userId: string, productName: string, marketName: string) {
+    return this.award({
+      userId,
+      type: ReputationEventType.SUBMIT_MARKET_LISTING_REJECTED,
+      points: REPUTATION_POINTS.SUBMIT_MARKET_LISTING_REJECTED,
+      title: 'Markete ekleme reddedildi',
+      description: `${productName} — ${marketName}`,
+      metadata: { productName, marketName },
+    });
+  }
+
   /** Mobil profil: itibar ozeti */
   async getProfile(userId: string) {
-    const [user, events, verifyCount, submitCount, approvedCount, rejectedCount] = await Promise.all([
+    const [user, events, verifyCount, submitCount, approvedCount, rejectedCount, contribCount, contribApproved] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
         select: { reputationScore: true },
@@ -145,9 +212,18 @@ export class ReputationService {
       this.prisma.priceSubmission.count({ where: { userId } }),
       this.prisma.priceSubmission.count({ where: { userId, status: 'APPROVED' } }),
       this.prisma.priceSubmission.count({ where: { userId, status: 'REJECTED' } }),
+      this.prisma.productContribution.count({ where: { userId } }),
+      this.prisma.productContribution.count({ where: { userId, status: 'APPROVED' } }),
     ]);
 
-    const score = user?.reputationScore ?? 1;
+    const storedScore = user?.reputationScore ?? REPUTATION_MIN;
+    const score = resolveEffectiveReputationScore(storedScore, {
+      eventCount: events.length,
+      verifications: verifyCount,
+      submissions: submitCount + contribCount,
+      approved: approvedCount + contribApproved,
+      rejected: rejectedCount,
+    });
     const level = getReputationLevel(score);
     const next = getNextReputationLevel(score);
 
@@ -164,15 +240,16 @@ export class ReputationService {
       stats: {
         verifications: verifyCount,
         submissions: submitCount,
-        approved: approvedCount,
+        contributions: contribCount,
+        approved: approvedCount + contribApproved,
         rejected: rejectedCount,
       },
       recentEvents: events,
       engagementTips: [
+        'Ürünü markette bulduysan barkodunu ekle → +0.10 itibar (onay +0.35)',
+        'Sistemde olmayan ürünü markete ekle → +0.12 itibar (onay +0.40)',
         'Marketten gördüğün fiyatı bildir → +0.08 itibar',
         'Doğru fiyatlara ✓ bas → +0.05 itibar',
-        'Yanlış fiyatları işaretle ve doğrusunu bildir → ekstra puan',
-        '5 kişi aynı fiyatı onaylarsa topluluk ödülü → +0.20 itibar',
       ],
     };
   }

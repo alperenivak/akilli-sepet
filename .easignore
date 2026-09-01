@@ -1,0 +1,23 @@
+# EAS build — monorepo kok dosyalari npm install karistirmasin
+/package.json
+/package-lock.json
+/pnpm-workspace.yaml
+
+# Mobil disi klasorler
+backend/
+admin-panel/
+shared/
+docs/
+scripts/
+nginx/
+pgadmin/
+postman/
+.github/
+.project-rules/
+node_modules/
+**/node_modules/
+**/.next/
+**/.expo/
+**/dist/
+**/coverage/
+*.log

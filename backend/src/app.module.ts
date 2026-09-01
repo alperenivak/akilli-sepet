@@ -23,10 +23,11 @@ import { ScraperModule } from './modules/scraper/scraper.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
 import { RewardsModule } from './modules/rewards/rewards.module';
+import { ContributionsModule } from './modules/contributions/contributions.module';
 import { PrismaModule } from './config/prisma.module';
 import {
   appConfig, databaseConfig, jwtConfig, aiConfig, s3Config, firebaseConfig,
-  dataSyncConfig, emailConfig, scraperConfig,
+  dataSyncConfig, emailConfig, scraperConfig, redisConfig, resolveBullRedis,
 } from './config';
 import { CommonModule } from './common/common.module';
 import { HealthModule } from './modules/health/health.module';
@@ -40,7 +41,7 @@ import { HealthModule } from './modules/health/health.module';
       envFilePath: ['.env', '.env.local'],
       load: [
         appConfig, databaseConfig, jwtConfig, aiConfig, s3Config, firebaseConfig,
-        dataSyncConfig, emailConfig, scraperConfig,
+        dataSyncConfig, emailConfig, scraperConfig, redisConfig,
       ],
       expandVariables: true,
     }),
@@ -67,11 +68,12 @@ import { HealthModule } from './modules/health/health.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        redis: {
-          host: configService.get<string>('REDIS_HOST', 'localhost'),
-          port: configService.get<number>('REDIS_PORT', 6379),
-          password: configService.get<string>('REDIS_PASSWORD') || undefined,
-        },
+        redis: resolveBullRedis({
+          url: configService.get<string>('redis.url'),
+          host: configService.get<string>('redis.host'),
+          port: configService.get<number>('redis.port'),
+          password: configService.get<string>('redis.password'),
+        }),
       }),
     }),
 
@@ -99,6 +101,7 @@ import { HealthModule } from './modules/health/health.module';
     AdminModule,         // Admin paneli ve raporlama
     StatisticsModule,    // Rol bazli istatistikler
     RewardsModule,       // Itibar odulleri ve market kuponlari
+    ContributionsModule, // Barkod / market listeleme katkilari
   ],
 })
 export class AppModule {}

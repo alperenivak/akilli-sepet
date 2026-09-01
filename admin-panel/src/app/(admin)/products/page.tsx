@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useTransition } from 'react';
 import {
-  productsApi, pricesByProductApi, marketsApi, reportsApi,
+  productsApi, pricesByProductApi, marketsApi, reportsApi, contributionsApi,
   ProductSortBy, SortOrder, ProductDetail, ProductMarketPrice,
 } from '../../../lib/api';
 import { Product, Category, PaginatedResponse, Market, Report } from '../../../types';
@@ -278,17 +278,34 @@ function UrunDrawer({
                     </span>
                   </div>
                   {(detail?.barcodes ?? []).length === 0 ? (
-                    <div className="px-4 py-4 text-center">
-                      <p className="text-xs" style={{ color: C.muted }}>Barkod yok</p>
+                    <div className="px-4 py-6 text-center">
+                      <p className="text-2xl mb-1.5">🔖</p>
+                      <p className="text-xs font-semibold mb-0.5" style={{ color: C.muted }}>Barkod Yok</p>
+                      <p className="text-[10px]" style={{ color: C.muted }}>
+                        Düzenle sekmesinden barkod ekleyebilirsiniz
+                      </p>
                     </div>
                   ) : (
                     (detail?.barcodes ?? []).map((b) => (
-                      <div key={b.id} className="flex items-center gap-3 px-4 py-2.5"
+                      <div key={b.id} className="flex items-center gap-3 px-4 py-3"
                         style={{ borderBottom: `1px solid ${C.border}` }}>
-                        <span className="text-sm">🔖</span>
-                        <code className="text-xs font-mono flex-1" style={{ color: C.text }}>{b.code}</code>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-                          style={{ background: C.cardAlt, color: C.muted }}>{b.format}</span>
+                        <span className="text-sm flex-shrink-0">🔖</span>
+                        <div className="flex-1 min-w-0">
+                          <code className="text-xs font-mono block" style={{ color: C.text }}>{b.code}</code>
+                          <span className="text-[10px]" style={{ color: C.muted }}>
+                            {b.format?.replace('_', '-') ?? 'EAN-13'}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(b.code).then(() => showToast(`Kopyalandı: ${b.code}`));
+                          }}
+                          className="text-[10px] px-2 py-1 rounded-lg font-semibold flex-shrink-0 transition-all hover:opacity-80"
+                          style={{ background: `${C.blue}15`, color: C.blue }}
+                          title="Kopyala"
+                        >
+                          📋 Kopyala
+                        </button>
                       </div>
                     ))
                   )}
@@ -575,11 +592,24 @@ function UrunKarti({
         )}
 
         <div className="flex items-center justify-between" style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
-          {hasSkt ? (
-            <SktBadge date={new Date(nex)} compact />
-          ) : (
-            <span className="text-[10px]" style={{ color: C.muted }}>SKT yok</span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {hasSkt ? (
+              <SktBadge date={new Date(nex)} compact />
+            ) : (
+              <span className="text-[10px]" style={{ color: C.muted }}>SKT yok</span>
+            )}
+            {/* Barkod göstergesi */}
+            {(() => {
+              const barcodes = (product as any).barcodes ?? [];
+              return barcodes.length > 0 ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5"
+                  style={{ background: '#0ea5e915', color: '#0ea5e9' }}
+                  title={`${barcodes.length} barkod`}>
+                  🔖 {barcodes.length}
+                </span>
+              ) : null;
+            })()}
+          </div>
           <span className="text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
             style={{ color: C.blue }}>Detay →</span>
         </div>
@@ -601,7 +631,7 @@ export default function ProductsPage() {
   const C = useColors();
 
   const [data,              setData]              = useState<PaginatedResponse<Product> | null>(null);
-  const [productStats,      setProductStats]      = useState<{ total: number; active: number; inactive: number; sktNearby30: number } | null>(null);
+  const [productStats,      setProductStats]      = useState<{ total: number; active: number; inactive: number; sktNearby30: number; withBarcode?: number; withoutBarcode?: number } | null>(null);
   const [statsReady,        setStatsReady]        = useState(false);
   const [categoryTree,      setCategoryTree]      = useState<Category[]>([]);
   const [markets,           setMarkets]           = useState<Market[]>([]);
@@ -618,6 +648,7 @@ export default function ProductsPage() {
   const [viewMode,          setViewMode]          = useState<'grid' | 'table'>('table');
   const [selectedProduct,   setSelectedProduct]   = useState<Product | null>(null);
   const [showCatModal,      setShowCatModal]      = useState(false);
+  const [pendingContribs,   setPendingContribs]   = useState<{ total: number; barcode: number; listing: number } | null>(null);
 
   const filterCategoryId = subCategoryId || parentCategoryId;
 
@@ -633,6 +664,18 @@ export default function ProductsPage() {
     productsApi.getStats()
       .then((s) => { setProductStats(s); setStatsReady(true); })
       .catch(() => setStatsReady(true)); // hata olsa bile skeleton'ı durdur
+    contributionsApi.list({ status: 'PENDING', limit: 1 })
+      .then((res) => {
+        const stats = (res as { stats?: { pendingTotal?: number; pendingBarcode?: number; pendingListing?: number } }).stats;
+        if (stats) {
+          setPendingContribs({
+            total: stats.pendingTotal ?? 0,
+            barcode: stats.pendingBarcode ?? 0,
+            listing: stats.pendingListing ?? 0,
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const fetchProducts = useCallback(async () => {
@@ -710,10 +753,10 @@ export default function ProductsPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4"
           style={{ borderTop: `1px solid ${C.border}` }}>
           {[
-            { icon: '📦', label: 'Toplam Ürün',  value: productStats?.total      ?? data?.total ?? 0, color: C.blue },
-            { icon: '✅', label: 'Aktif',        value: productStats?.active      ?? 0,               color: '#34d399' },
-            { icon: '⚠️', label: 'SKT Yakın',   value: productStats?.sktNearby30 ?? 0,               color: '#f59e0b' },
-            { icon: '🏪', label: 'Market',       value: markets.length,                               color: '#a78bfa' },
+            { icon: '📦', label: 'Toplam Ürün',  value: productStats?.total           ?? data?.total ?? 0, color: C.blue },
+            { icon: '✅', label: 'Aktif',        value: productStats?.active           ?? 0,             color: '#34d399' },
+            { icon: '🔖', label: 'Barkodlu',     value: productStats?.withBarcode      ?? 0,             color: '#0ea5e9' },
+            { icon: '⚠️', label: 'Barkodsuz',   value: productStats?.withoutBarcode   ?? 0,             color: '#f59e0b' },
           ].map((m, i) => (
             <div key={m.label} className="px-5 py-4 flex items-center gap-3"
               style={{ borderLeft: i > 0 ? `1px solid ${C.border}` : undefined }}>
@@ -734,6 +777,25 @@ export default function ProductsPage() {
             </div>
           ))}
         </div>
+
+        {pendingContribs && pendingContribs.total > 0 && (
+          <a href="/contributions?status=PENDING"
+            className="mx-5 mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-xl transition-all hover:opacity-90"
+            style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📊</span>
+              <div>
+                <p className="text-sm font-bold" style={{ color: '#92400e' }}>
+                  {pendingContribs.total} bekleyen kullanıcı katkısı
+                </p>
+                <p className="text-[11px]" style={{ color: '#b45309' }}>
+                  {pendingContribs.barcode} barkod · {pendingContribs.listing} markete ekleme
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-bold" style={{ color: '#92400e' }}>İncele →</span>
+          </a>
+        )}
 
         {/* Arama + Filtreler */}
         <div className="px-5 py-3 space-y-3" style={{ borderTop: `1px solid ${C.border}`, background: C.cardAlt }}>
@@ -866,12 +928,23 @@ export default function ProductsPage() {
                       ) : '—'}
                     </td>
                     <td className="px-4 py-3">
-                      {barcodes[0] ? (
-                        <code className="text-xs px-2 py-0.5 rounded"
-                          style={{ background: C.cardAlt, color: C.secondary }}>
-                          {barcodes[0].code}
-                        </code>
-                      ) : <span style={{ color: C.muted }}>—</span>}
+                      {barcodes.length === 0 ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded font-semibold"
+                          style={{ background: '#f8717110', color: '#f87171' }}>Yok</span>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <code className="text-[11px] font-mono px-2 py-0.5 rounded"
+                            style={{ background: C.cardAlt, color: C.secondary }}>
+                            {barcodes[0].code}
+                          </code>
+                          {barcodes.length > 1 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-bold"
+                              style={{ background: `${C.blue}15`, color: C.blue }}>
+                              +{barcodes.length - 1}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {nex ? <SktBadge date={new Date(nex)} compact /> : <span style={{ color: C.muted }} className="text-xs">—</span>}

@@ -1,0 +1,212 @@
+[
+  {
+    "match": "pınar süt 1 l",
+    "brand": "Pınar",
+    "barcode": "8680523100012",
+    "format": "EAN_13",
+    "note": "Pınar Süt 1L — demo barkodu, doğrulanmış"
+  },
+  {
+    "match": "sek süt 1 l",
+    "brand": "Sek",
+    "barcode": "8690637100964",
+    "format": "EAN_13",
+    "note": "Sek UHT Tam Yağlı Süt 1L"
+  },
+  {
+    "match": "içim süt 1 l",
+    "brand": "İçim",
+    "barcode": "8690803082216",
+    "format": "EAN_13",
+    "note": "İçim Günlük Pastörize Süt 1L"
+  },
+  {
+    "match": "keskinoğlu yumurta",
+    "brand": "Keskinoğlu",
+    "barcode": "8690637218691",
+    "format": "EAN_13",
+    "note": "Keskinoğlu 20li Yumurta L boy"
+  },
+  {
+    "match": "abalı yumurta",
+    "brand": "Abalı",
+    "barcode": "8682240100018",
+    "format": "EAN_13",
+    "note": "Abalı Çiftliği 30lu Yumurta"
+  },
+  {
+    "match": "papatya ekmek",
+    "brand": "Papatya",
+    "barcode": "8680161070016",
+    "format": "EAN_13",
+    "note": "Papatya Ekmek Adet Küçük"
+  },
+  {
+    "match": "abalı ayçiçek yağı 5 l",
+    "brand": "Abalı",
+    "barcode": "8690637100049",
+    "format": "EAN_13",
+    "note": "Abalı Ayçiçek Yağı 5L"
+  },
+  {
+    "match": "komili ayçiçek yağı",
+    "brand": "Komili",
+    "barcode": "8690637210120",
+    "format": "EAN_13",
+    "note": "Komili Ayçiçek Yağı 5L"
+  },
+  {
+    "match": "filiz yumurtalı bukle makarna",
+    "brand": "Filiz",
+    "barcode": "8690526085324",
+    "format": "EAN_13",
+    "note": "Filiz Yumurtalı Bukle Makarna 350G"
+  },
+  {
+    "match": "barilla spagetti",
+    "brand": "Barilla",
+    "barcode": "8690566091124",
+    "format": "EAN_13",
+    "note": "Barilla Spagetti No.5 500G"
+  },
+  {
+    "match": "içim mini top peynir",
+    "brand": "İçim",
+    "barcode": "8690175010239",
+    "format": "EAN_13",
+    "note": "İçim Mini Top Peynir 180G"
+  },
+  {
+    "match": "sütaş latte",
+    "brand": "Sütaş",
+    "barcode": "8690362010130",
+    "format": "EAN_13",
+    "note": "Sütaş Latte 1L"
+  },
+  {
+    "match": "abant su 1,5 l",
+    "brand": "Abant",
+    "barcode": "8690575891018",
+    "format": "EAN_13",
+    "note": "Abant Doğal Kaynak Suyu 1.5L"
+  },
+  {
+    "match": "abant su 500 ml",
+    "brand": "Abant",
+    "barcode": "8690575891025",
+    "format": "EAN_13",
+    "note": "Abant Doğal Kaynak Suyu 500ml"
+  },
+  {
+    "match": "bingo elde bulaşık deterjanı sensitive",
+    "brand": "Bingo",
+    "barcode": "8690947525821",
+    "format": "EAN_13",
+    "note": "Bingo Elde Bulaşık Sensitive 650ml"
+  },
+  {
+    "match": "activia sade yoğurt",
+    "brand": "Activia",
+    "barcode": "8690637161063",
+    "format": "EAN_13",
+    "note": "Activia Probiyotik Sade 4x100G"
+  },
+  {
+    "match": "activia çilekli yoğurt",
+    "brand": "Activia",
+    "barcode": "8690637161070",
+    "format": "EAN_13",
+    "note": "Activia Probiyotik Çilek 4x100G"
+  },
+  {
+    "match": "nutella",
+    "brand": "Ferrero",
+    "barcode": "8000500037621",
+    "format": "EAN_13",
+    "note": "Nutella Fındık Kreması 400G"
+  },
+  {
+    "match": "nutella 750",
+    "brand": "Ferrero",
+    "barcode": "3017620425035",
+    "format": "EAN_13",
+    "note": "Nutella 750G büyük boy"
+  },
+  {
+    "match": "nesquik kakaolu süt",
+    "brand": "Nesquik",
+    "barcode": "7613032941079",
+    "format": "EAN_13",
+    "note": "Nesquik Kakaolu Süt 180ml"
+  },
+  {
+    "match": "barilla penne",
+    "brand": "Barilla",
+    "barcode": "8076808520636",
+    "format": "EAN_13",
+    "note": "Barilla Penne Rigate No.73 500G"
+  },
+  {
+    "match": "barilla fusilli",
+    "brand": "Barilla",
+    "barcode": "8076808520629",
+    "format": "EAN_13",
+    "note": "Barilla Fusilli No.34 500G"
+  },
+  {
+    "match": "pınar yoğurt",
+    "brand": "Pınar",
+    "barcode": "8680523200018",
+    "format": "EAN_13",
+    "note": "Pınar Tam Yağlı Yoğurt 1KG"
+  },
+  {
+    "match": "ülker çikolata",
+    "brand": "Ülker",
+    "barcode": "8690504099773",
+    "format": "EAN_13",
+    "note": "Ülker Çikolatalı Gofret"
+  },
+  {
+    "match": "didi tuvalet kağıdı",
+    "brand": "Didi",
+    "barcode": "8690526009368",
+    "format": "EAN_13",
+    "note": "Didi Tuvalet Kağıdı 32li"
+  },
+  {
+    "match": "ariel toz deterjan",
+    "brand": "Ariel",
+    "barcode": "8001841677880",
+    "format": "EAN_13",
+    "note": "Ariel Toz Deterjan 3KG"
+  },
+  {
+    "match": "prima bebek bezi",
+    "brand": "Prima",
+    "barcode": "8006540893685",
+    "format": "EAN_13",
+    "note": "Prima Premium Care Midi 3-6kg"
+  },
+  {
+    "match": "domestos çamaşır suyu",
+    "brand": "Domestos",
+    "barcode": "8690637038073",
+    "format": "EAN_13",
+    "note": "Domestos Çamaşır Suyu 1750ml"
+  },
+  {
+    "match": "elidor şampuan",
+    "brand": "Elidor",
+    "barcode": "8690637086387",
+    "format": "EAN_13",
+    "note": "Elidor Saç Bakım Şampuanı"
+  },
+  {
+    "match": "algida cornetto",
+    "brand": "Algida",
+    "barcode": "8690632036038",
+    "format": "EAN_13",
+    "note": "Algida Cornetto Classico"
+  }
+]

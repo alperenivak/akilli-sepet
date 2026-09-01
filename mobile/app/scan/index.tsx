@@ -16,9 +16,10 @@ import type { PermissionResponse } from 'expo-modules-core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getProductByBarcode } from '../../src/api/products';
+import { useAuthStore } from '../../src/store/authStore';
 
 type ScanMode = 'product' | 'report';
-type ContributeIntent = 'verify' | 'submit';
+type ContributeIntent = 'verify' | 'submit' | 'barcode' | 'market-listing';
 
 const INTENT_LABELS: Record<ContributeIntent, { title: string; sub: string }> = {
   verify: {
@@ -29,6 +30,14 @@ const INTENT_LABELS: Record<ContributeIntent, { title: string; sub: string }> = 
     title: 'Fiyat bildirme',
     sub: 'Ürünü bul → market fiyatını gir ve paylaş',
   },
+  barcode: {
+    title: 'Barkod ekleme',
+    sub: 'Ürünün barkodunu tara ve katkı gönder',
+  },
+  'market-listing': {
+    title: 'Markete ekleme',
+    sub: 'Ürünü bir markette gördüysen fiyatıyla bildir',
+  },
 };
 
 type CameraPerm = Pick<PermissionResponse, 'granted' | 'canAskAgain' | 'status'>;
@@ -38,7 +47,11 @@ function applyPermResponse(res: PermissionResponse): CameraPerm {
 }
 
 export default function ScanScreen() {
-  const { intent } = useLocalSearchParams<{ intent?: ContributeIntent }>();
+  const { intent, productId, productName } = useLocalSearchParams<{
+    intent?: ContributeIntent;
+    productId?: string;
+    productName?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const [cameraPerm, setCameraPerm] = useState<CameraPerm | null>(null);
   const [permChecking, setPermChecking] = useState(true);
@@ -48,6 +61,7 @@ export default function ScanScreen() {
   const [scanMode, setScanMode] = useState<ScanMode>('product');
   const [flashOn, setFlashOn] = useState(false);
   const [requestingPerm, setRequestingPerm] = useState(false);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const lastScannedCode = useRef<string>('');
 
   const goSearchFallback = useCallback(() => {
@@ -151,7 +165,49 @@ export default function ScanScreen() {
         const product = await getProductByBarcode(barcode);
 
         if (product?.id) {
-          if (intent === 'submit') {
+          const availPrices = (product.prices ?? []).filter((p) => p.isAvailable);
+
+          if (intent === 'barcode' && productId) {
+            router.replace({
+              pathname: '/contributions/barcode',
+              params: {
+                productId,
+                productName: productName ?? product.name,
+                barcode,
+              },
+            });
+          } else if (intent === 'market-listing' || (availPrices.length === 0 && !intent)) {
+            if (!isAuthenticated) {
+              Alert.alert(
+                'Giriş gerekli',
+                'Ürünü markete eklemek için giriş yapmalısın.',
+                [
+                  { text: 'Giriş Yap', onPress: () => router.replace('/(auth)/login') },
+                  { text: 'Ürün Detayı', onPress: () => router.replace(`/product/${product.id}`) },
+                ],
+              );
+            } else if (intent === 'market-listing' || availPrices.length === 0) {
+              Alert.alert(
+                availPrices.length === 0 ? 'Henüz markette yok' : 'Markete ekle',
+                `"${product.name}" için market ve fiyat bildirerek +0.40 itibar kazanabilirsin.`,
+                [
+                  {
+                    text: 'Markete Ekle',
+                    onPress: () => router.replace({
+                      pathname: '/contributions/market-listing',
+                      params: { productId: product.id, productName: product.name },
+                    }),
+                  },
+                  {
+                    text: 'Ürün Detayı',
+                    onPress: () => router.replace(`/product/${product.id}`),
+                  },
+                ],
+              );
+            } else {
+              router.replace(`/product/${product.id}`);
+            }
+          } else if (intent === 'submit') {
             router.replace({
               pathname: '/prices/submit',
               params: { productId: product.id, productName: product.name },

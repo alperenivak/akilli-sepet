@@ -1,0 +1,12 @@
+# Nixpacks fallback (Dockerfile kullanilmazsa)
+[phases.setup]
+nixPkgs = ["nodejs_20", "openssl"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "node dist/main.js"

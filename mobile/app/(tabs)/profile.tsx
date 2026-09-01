@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../src/store/authStore';
 import { getMyReports } from '../../src/api/reports';
+import { getMyNotifications } from '../../src/api/notifications';
 import { usePriceAlerts } from '../../src/hooks/usePriceAlerts';
 import { updateProfile, getMyProfile } from '../../src/api/users';
 import { ContributionSection } from '../../src/components/reputation/ContributionSection';
@@ -123,8 +124,9 @@ function EditProfileSheet({ visible, user, onClose, onSaved }: {
 
 // ── Tasarruf Widget ──────────────────────────────────
 function SavingsWidget({ reportCount, alertCount }: { reportCount: number; alertCount: number }) {
-  const estimatedSaving = reportCount * 4 + alertCount * 12 + 35;
+  const estimatedSaving = reportCount * 4 + alertCount * 12;
   const priceChecks = alertCount + reportCount;
+  const hasActivity = reportCount > 0 || alertCount > 0;
 
   return (
     <View style={sw.wrap}>
@@ -143,7 +145,11 @@ function SavingsWidget({ reportCount, alertCount }: { reportCount: number; alert
         </View>
 
         <Text style={sw.bigAmount}>{estimatedSaving}₺</Text>
-        <Text style={sw.bigSub}>Bu ay sepet ve alarmlarınla yaklaşık tasarruf</Text>
+        <Text style={sw.bigSub}>
+          {hasActivity
+            ? 'Bu ay sepet ve alarmlarınla yaklaşık tasarruf'
+            : 'Fiyat alarmı veya SKT ihbarı ekledikçe tasarrufun burada görünür'}
+        </Text>
 
         <View style={sw.statsRow}>
           <View style={sw.stat}>
@@ -206,6 +212,14 @@ export default function ProfileScreen() {
 
   const { data: activeAlerts = [], refetch: refetchAlerts } = usePriceAlerts('active');
   const alertTotal = activeAlerts.length;
+
+  const { data: notifData } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => getMyNotifications(1, 50),
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+  const unreadNotifCount = notifData?.unreadCount ?? 0;
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -318,7 +332,8 @@ export default function ProfileScreen() {
           <View style={s.menuList}>
             <MenuRow icon="pricetags-outline" label="Takip Edilen Ürünler" badge={alertTotal > 0 ? String(alertTotal) : undefined} onPress={() => router.push('/alerts/my')} />
             <MenuRow icon="document-text-outline" label="Tüm İhbarlarım"      badge={reportTotal > 0 ? String(reportTotal) : undefined} onPress={() => router.push('/reports/my')} />
-            <MenuRow icon="notifications-outline" label="Bildirimler"          onPress={() => router.push('/notifications')} />
+            <MenuRow icon="ribbon-outline" label="Katkılarım" onPress={() => router.push('/contributions/mine')} />
+            <MenuRow icon="notifications-outline" label="Bildirimler" badge={unreadNotifCount > 0 ? String(unreadNotifCount) : undefined} onPress={() => router.push('/notifications')} />
             <MenuRow icon="chatbubble-ellipses-outline" label="Akıllı Asistan" onPress={() => router.push('/ai/chat')} />
             <MenuRow icon="scan-outline"          label="Barkod Tara"          onPress={() => router.push('/scan' as any)} />
           </View>

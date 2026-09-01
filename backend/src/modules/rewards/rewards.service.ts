@@ -10,6 +10,7 @@ import { RewardCodeMode, RewardCodeSource, UserRole } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 import {
   getReputationLevel, getNextReputationLevel, levelProgressPercent,
+  resolveEffectiveReputationScore,
 } from '../users/reputation.constants';
 import { STORE_USAGE_NOTICE } from './rewards.constants';
 import { CreateRewardDto } from './dto/create-reward.dto';
@@ -74,13 +75,26 @@ export class RewardsService {
   }
 
   async getMyRewards(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { reputationScore: true },
-    });
+    const [user, eventCount, verifyCount, submitCount, approvedCount, rejectedCount] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { reputationScore: true },
+      }),
+      this.prisma.reputationEvent.count({ where: { userId } }),
+      this.prisma.priceFeedback.count({ where: { userId } }),
+      this.prisma.priceSubmission.count({ where: { userId } }),
+      this.prisma.priceSubmission.count({ where: { userId, status: 'APPROVED' } }),
+      this.prisma.priceSubmission.count({ where: { userId, status: 'REJECTED' } }),
+    ]);
     if (!user) throw new NotFoundException('Kullanıcı bulunamadı');
 
-    const score = user.reputationScore;
+    const score = resolveEffectiveReputationScore(user.reputationScore, {
+      eventCount,
+      verifications: verifyCount,
+      submissions: submitCount,
+      approved: approvedCount,
+      rejected: rejectedCount,
+    });
     const level = getReputationLevel(score);
     const nextLevel = getNextReputationLevel(score);
 
@@ -157,7 +171,7 @@ export class RewardsService {
         nextRewardTitle: nextReward?.title ?? null,
         nextRewardAt: nextReward?.minReputation ?? null,
       },
-      pitch: this.buildPitch(score, claimableCount, nextReward),
+      pitch: this.buildPitch(score, claimableCount, nextReward, rewards.length),
     };
   }
 
@@ -165,13 +179,18 @@ export class RewardsService {
     score: number,
     claimable: number,
     nextReward?: { title: string; minReputation: number; progressPercent: number },
+    totalRewards = 0,
   ) {
     if (claimable > 0) {
       return `${claimable} market kuponu seni bekliyor! Hemen al ve alışverişinde kullan.`;
     }
     if (nextReward) {
-      const gap = (nextReward.minReputation - score).toFixed(1);
-      return `Fiyat doğrula ve bildir — ${gap} itibar sonra "${nextReward.title}" kuponunu aç.`;
+      const gap = Math.max(0, nextReward.minReputation - score);
+      const gapText = gap < 0.05 ? 'birkaç' : gap.toFixed(1);
+      return `Fiyat doğrula ve bildir — ${gapText} itibar sonra "${nextReward.title}" kuponunu aç.`;
+    }
+    if (totalRewards === 0) {
+      return 'Partner market kuponları yakında — fiyat doğrula ve bildirerek itibar kazan.';
     }
     return 'Tüm ödüllerin açık! Topluluk katkınla marketlerde tasarruf etmeye devam et.';
   }

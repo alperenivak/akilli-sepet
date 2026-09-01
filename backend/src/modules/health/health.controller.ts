@@ -32,14 +32,17 @@ export class HealthController {
       checks.database = false;
     }
 
-    const redis = new Redis({
-      host: this.config.get<string>('REDIS_HOST', 'localhost'),
-      port: this.config.get<number>('REDIS_PORT', 6379),
-      password: this.config.get<string>('REDIS_PASSWORD') || undefined,
-      maxRetriesPerRequest: 1,
-      connectTimeout: 3000,
-      lazyConnect: true,
-    });
+    const redisUrl = this.config.get<string>('redis.url');
+    const redis = redisUrl
+      ? new Redis(redisUrl, { maxRetriesPerRequest: 1, connectTimeout: 3000, lazyConnect: true })
+      : new Redis({
+          host: this.config.get<string>('redis.host', 'localhost'),
+          port: this.config.get<number>('redis.port', 6379),
+          password: this.config.get<string>('redis.password') || undefined,
+          maxRetriesPerRequest: 1,
+          connectTimeout: 3000,
+          lazyConnect: true,
+        });
 
     try {
       await redis.connect();

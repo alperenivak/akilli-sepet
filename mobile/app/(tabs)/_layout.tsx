@@ -12,7 +12,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from '@tanstack/react-query';
 import { useCartStore } from '../../src/store/cartStore';
+import { useAuthStore } from '../../src/store/authStore';
+import { getMyNotifications } from '../../src/api/notifications';
 import { COLORS } from '../../src/utils/constants';
 
 const { width } = Dimensions.get('window');
@@ -26,81 +29,115 @@ const TABS = [
   { name: 'profile', label: 'Profil',    icon: 'person',     iconActive: 'person'     },
 ];
 
-// ── Özel tab bar bileşeni ────────────────────────────
-function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  const insets  = useSafeAreaInsets();
-  const router  = useRouter();
-  const cart    = useCartStore((s) => s.cart?.totalItems ?? 0);
+// ── Tek sekme (hook'lar bilesen ustunde olmali) ──────
+function TabBarItem({
+  tab,
+  routeKey,
+  focused,
+  cartCount,
+  unreadNotifs,
+  onPress,
+}: {
+  tab: typeof TABS[number];
+  routeKey: string;
+  focused: boolean;
+  cartCount: number;
+  unreadNotifs: number;
+  onPress: () => void;
+}) {
+  const isCart = tab.name === 'cart';
+  const isProfile = tab.name === 'profile';
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  // Merkez tara butonunun scale animasyonu
+  useEffect(() => {
+    Animated.spring(scaleAnim, {
+      toValue: focused ? 1.18 : 1,
+      tension: 200,
+      friction: 6,
+      useNativeDriver: true,
+    }).start();
+  }, [focused, scaleAnim]);
+
+  return (
+    <TouchableOpacity key={routeKey} style={styles.tabItem} onPress={onPress} activeOpacity={0.7}>
+      <Animated.View style={[styles.iconWrap, focused && styles.iconWrapActive, { transform: [{ scale: scaleAnim }] }]}>
+        <Ionicons
+          name={(focused ? tab.iconActive : `${tab.icon}-outline`) as any}
+          size={22}
+          color={focused ? COLORS.primary : COLORS.textMuted}
+        />
+        {isCart && cartCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{cartCount > 9 ? '9+' : cartCount}</Text>
+          </View>
+        )}
+        {isProfile && unreadNotifs > 0 && (
+          <View style={[styles.badge, { backgroundColor: '#ef4444' }]}>
+            <Text style={styles.badgeText}>{unreadNotifs > 9 ? '9+' : unreadNotifs}</Text>
+          </View>
+        )}
+      </Animated.View>
+      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]} numberOfLines={1}>
+        {tab.label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+// ── Özel tab bar bileşeni ────────────────────────────
+function CustomTabBar({ state, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const cart = useCartStore((s) => s.cart?.totalItems ?? 0);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  const { data: notifData } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => getMyNotifications(1, 50),
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+  });
+  const unreadNotifs = notifData?.unreadCount ?? 0;
+
   const scanScale = useRef(new Animated.Value(1)).current;
 
   const pressScan = () => {
     Animated.sequence([
       Animated.timing(scanScale, { toValue: 0.88, duration: 100, useNativeDriver: true }),
-      Animated.spring(scanScale,  { toValue: 1,    tension: 200, friction: 6,   useNativeDriver: true }),
+      Animated.spring(scanScale, { toValue: 1, tension: 200, friction: 6, useNativeDriver: true }),
     ]).start();
     router.push('/scan' as any);
   };
 
-  // Aktif sekme index'i
-  const activeIdx = state.index;
-
-  // Sekmeler: 0-1 sol taraf, 2 merkez boşluk, 3-4 sağ taraf
-  const leftTabs  = TABS.slice(0, 2);
+  const leftTabs = TABS.slice(0, 2);
   const rightTabs = TABS.slice(3, 5);
 
-  const renderTab = (tab: typeof TABS[number], routeIdx: number) => {
-    const route    = state.routes[routeIdx];
-    const focused  = state.index === routeIdx;
-    const isCart   = tab.name === 'cart';
-
-    const onPress = () => {
-      const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-      if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
-    };
-
-    // Icon animasyonu
-    const scaleAnim = useRef(new Animated.Value(1)).current;
-    useEffect(() => {
-      if (focused) {
-        Animated.spring(scaleAnim, { toValue: 1.18, tension: 200, friction: 6, useNativeDriver: true }).start();
-      } else {
-        Animated.spring(scaleAnim, { toValue: 1, tension: 200, friction: 6, useNativeDriver: true }).start();
-      }
-    }, [focused]);
-
-    return (
-      <TouchableOpacity key={tab.name} style={styles.tabItem} onPress={onPress} activeOpacity={0.7}>
-        <Animated.View style={[styles.iconWrap, focused && styles.iconWrapActive, { transform: [{ scale: scaleAnim }] }]}>
-          <Ionicons
-            name={(focused ? tab.iconActive : `${tab.icon}-outline`) as any}
-            size={22}
-            color={focused ? COLORS.primary : COLORS.textMuted}
-          />
-          {/* Sepet rozeti */}
-          {isCart && cart > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{cart > 9 ? '9+' : cart}</Text>
-            </View>
-          )}
-        </Animated.View>
-        <Text style={[styles.tabLabel, focused && styles.tabLabelActive]} numberOfLines={1}>
-          {tab.label}
-        </Text>
-      </TouchableOpacity>
-    );
+  const makePressHandler = (routeIdx: number, routeKey: string, routeName: string, focused: boolean) => () => {
+    const event = navigation.emit({ type: 'tabPress', target: routeKey, canPreventDefault: true });
+    if (!focused && !event.defaultPrevented) navigation.navigate(routeName);
   };
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom || 8 }]}>
-      {/* Sol 2 sekme */}
       <View style={styles.side}>
-        {renderTab(leftTabs[0], 0)}
-        {renderTab(leftTabs[1], 1)}
+        {leftTabs.map((tab, idx) => {
+          const routeIdx = idx;
+          const route = state.routes[routeIdx];
+          return (
+            <TabBarItem
+              key={tab.name}
+              tab={tab}
+              routeKey={route.key}
+              focused={state.index === routeIdx}
+              cartCount={cart}
+              unreadNotifs={unreadNotifs}
+              onPress={makePressHandler(routeIdx, route.key, route.name, state.index === routeIdx)}
+            />
+          );
+        })}
       </View>
 
-      {/* Merkez: yükseltilmiş Barkod Tara butonu */}
       <View style={styles.centerSlot}>
         <Animated.View style={{ transform: [{ scale: scanScale }] }}>
           <View style={styles.scanOuter}>
@@ -112,10 +149,22 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         <Text style={styles.scanLabel}>Tara</Text>
       </View>
 
-      {/* Sağ 2 sekme */}
       <View style={styles.side}>
-        {renderTab(rightTabs[0], 3)}
-        {renderTab(rightTabs[1], 4)}
+        {rightTabs.map((tab, idx) => {
+          const routeIdx = idx + 3;
+          const route = state.routes[routeIdx];
+          return (
+            <TabBarItem
+              key={tab.name}
+              tab={tab}
+              routeKey={route.key}
+              focused={state.index === routeIdx}
+              cartCount={cart}
+              unreadNotifs={unreadNotifs}
+              onPress={makePressHandler(routeIdx, route.key, route.name, state.index === routeIdx)}
+            />
+          );
+        })}
       </View>
     </View>
   );

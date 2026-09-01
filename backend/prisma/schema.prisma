@@ -49,7 +49,7 @@ model User {
   managedMarket   Market? @relation("MarketManagers", fields: [managedMarketId], references: [id])
 
   // Kullanici itibar skoru — dogru fiyat bildirimleri ile artar (0.0 - 5.0)
-  reputationScore Float     @default(1.0)
+  reputationScore Float     @default(0)
 
   // Iliskiler
   carts            Cart[]
@@ -63,6 +63,8 @@ model User {
   priceAlerts      PriceAlert[]
   priceSubmissions    PriceSubmission[] @relation("SubmissionReporter")
   reviewedSubmissions PriceSubmission[] @relation("SubmissionReviewer")
+  productContributions    ProductContribution[] @relation("ContributionReporter")
+  reviewedContributions   ProductContribution[] @relation("ContributionReviewer")
   reputationEvents    ReputationEvent[]
   rewardClaims        UserRewardClaim[]
 
@@ -139,6 +141,7 @@ model Product {
   reports          Report[]
   priceAlerts      PriceAlert[]
   priceSubmissions PriceSubmission[]
+  contributions    ProductContribution[]
   
   isActive    Boolean   @default(true)
   
@@ -210,6 +213,7 @@ model Market {
   priceAlerts      PriceAlert[]
   cartItems        CartItem[]
   priceSubmissions PriceSubmission[]
+  contributions    ProductContribution[]
   partnerRewards   CommunityReward[]
   
   isActive    Boolean  @default(true)
@@ -333,6 +337,18 @@ enum ReputationEventType {
   SUBMIT_APPROVED      // Admin / otomatik onay
   SUBMIT_REJECTED      // Admin reddi
   SUBMIT_AUTO_APPROVED // Topluluk konsensusu (5+ bildirim)
+  SUBMIT_BARCODE             // Barkod katkisi gonderildi
+  SUBMIT_BARCODE_APPROVED    // Barkod katkisi onaylandi
+  SUBMIT_BARCODE_REJECTED    // Barkod katkisi reddedildi
+  SUBMIT_MARKET_LISTING      // Urunu markete ekleme katkisi
+  SUBMIT_MARKET_LISTING_APPROVED
+  SUBMIT_MARKET_LISTING_REJECTED
+}
+
+// Kullanici urun/barkod katki turleri
+enum ContributionType {
+  BARCODE         // Mevcut urune barkod ekleme
+  MARKET_LISTING  // Urunu bir markette listeleme (ilk fiyat)
 }
 
 // Itibar gecmisi — kullaniciya gosterilecek aktivite akisi
@@ -502,6 +518,38 @@ model PriceSubmission {
   @@index([status])
   @@index([createdAt])
   @@map("price_submissions")
+}
+
+// Kullanici barkod / market listeleme katkilari — admin onay kuyrugu
+model ProductContribution {
+  id           String             @id @default(cuid())
+  type         ContributionType
+  userId       String
+  user         User               @relation("ContributionReporter", fields: [userId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  marketId     String?
+  market       Market?            @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  barcode      String?
+  barcodeFormat BarcodeFormat?
+  amount       Int?               // Kurus — MARKET_LISTING icin zorunlu
+  note         String?
+  status       SubmissionStatus   @default(PENDING)
+  adminNote    String?
+  reviewedById String?
+  reviewedBy   User?              @relation("ContributionReviewer", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  createdBarcodeId String?
+  createdPriceId   String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([type, status])
+  @@index([userId])
+  @@index([productId])
+  @@index([marketId])
+  @@index([barcode])
+  @@map("product_contributions")
 }
 
 // =====================================================

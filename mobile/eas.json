@@ -12,14 +12,21 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.yourdomain.com/api"
+        "EXPO_PUBLIC_API_URL": "https://akilli-sepet-production.up.railway.app/api"
       },
-      "android": { "buildType": "apk" }
+      "node": "20.20.2",
+      "cache": {
+        "disabled": true
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "autoIncrement": true,
+      "node": "22.14.0",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.yourdomain.com/api"
+        "EXPO_PUBLIC_API_URL": "https://akilli-sepet-production.up.railway.app/api"
       }
     }
   },

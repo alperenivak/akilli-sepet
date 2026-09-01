@@ -5,6 +5,8 @@ node_modules/
 dist/
 .next/
 .expo/
+.expo-export-test/
+.expo-export-test2/
 .env
 .env.local
 .env.*.local
@@ -15,6 +17,9 @@ backups/
 coverage/
 .nyc_output/
 prisma/migrations/
+# Referans veri export (hassas — git'e ekleme)
+backend/prisma/data/export/
+backend/prisma/data/barcode-enrich/
 *.tsbuildinfo
 android/
 ios/

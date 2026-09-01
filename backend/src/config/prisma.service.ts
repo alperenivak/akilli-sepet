@@ -21,13 +21,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
-    // Uygulama baslarken veritabanina baglan
     try {
       await this.$connect();
       this.logger.log('Veritabani baglantisi basarili');
     } catch (error) {
       this.logger.error('Veritabani baglantisi basarisiz:', error);
-      throw error;
+      // Production: HTTP sunucusu ayaga kalksin, /health/ready degraded donsun
+      if (process.env.NODE_ENV !== 'production') {
+        throw error;
+      }
     }
   }
 

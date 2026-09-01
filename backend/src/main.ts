@@ -24,7 +24,8 @@ async function bootstrap() {
   });
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 3000);
+  // Railway ve diger PaaS ortamlari PORT env verir; ConfigService yerine dogrudan oku
+  const port = parseInt(process.env.PORT ?? '', 10) || 3000;
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
   // ---- Guvenlik Middleware'leri ----
@@ -134,6 +135,7 @@ async function bootstrap() {
   // 0.0.0.0: telefon/emulator LAN uzerinden erisebilsin
   await app.listen(port, '0.0.0.0');
   
+  logger.log(`PORT env: ${process.env.PORT ?? '(unset)'} -> dinlenen port: ${port}`);
   logger.log(`Akıllı Sepet API ${port} portunda calisiyor`);
   logger.log(`Ortam: ${nodeEnv}`);
 }

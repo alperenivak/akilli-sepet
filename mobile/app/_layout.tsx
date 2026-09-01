@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, AppState, AppStateStatus } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Font from 'expo-font';
@@ -113,6 +114,7 @@ export default function RootLayout() {
   }
 
   return (
+    <SafeAreaProvider>
     <QueryClientProvider client={queryClient}>
       <AppInitializer>
         <StatusBar style="dark" />
@@ -134,10 +136,14 @@ export default function RootLayout() {
           <Stack.Screen name="alerts/my"    options={{ title: 'Takip Edilen Ürünler', headerBackTitle: 'Profil' }} />
           <Stack.Screen name="coupons/index" options={{ title: 'Kuponlarım', headerBackTitle: 'Profil' }} />
           <Stack.Screen name="notifications"options={{ title: 'Bildirimler', headerBackTitle: 'Geri' }} />
+          <Stack.Screen name="contributions/barcode" options={{ title: 'Barkod Ekle', headerBackTitle: 'Geri' }} />
+          <Stack.Screen name="contributions/market-listing" options={{ title: 'Markete Ekle', headerBackTitle: 'Geri' }} />
+          <Stack.Screen name="contributions/mine" options={{ title: 'Katkılarım', headerBackTitle: 'Geri' }} />
           <Stack.Screen name="ai/chat"      options={{ title: 'Akıllı Asistan', headerBackTitle: 'Geri' }} />
           <Stack.Screen name="about"        options={{ headerShown: false }} />
         </Stack>
       </AppInitializer>
     </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }

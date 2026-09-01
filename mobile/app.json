@@ -1,4 +1,4 @@
-﻿{
+{
   "expo": {
     "name": "Akıllı Sepet",
     "slug": "akilli-sepet",
@@ -29,6 +29,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.akillisebet.mobile",
+      "versionCode": 2,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
@@ -42,7 +43,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router",
       "expo-secure-store",
       [
         "expo-camera",
@@ -64,14 +64,6 @@
       ],
       "@react-native-community/datetimepicker"
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
-    "scheme": "akillisebet",
-    "extra": {
-      "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
-      }
-    }
+    "scheme": "akillisebet"
   }
 }

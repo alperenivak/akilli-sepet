@@ -493,4 +493,18 @@ export const submissionsApi = {
       .then((r) => r.data.data ?? r.data),
 };
 
+export const contributionsApi = {
+  list: (params: {
+    type?: 'BARCODE' | 'MARKET_LISTING';
+    status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+    page?: number;
+    limit?: number;
+  } = {}) =>
+    api.get('/contributions', { params }).then((r) => r.data.data ?? r.data),
+
+  review: (id: string, decision: 'APPROVED' | 'REJECTED', adminNote?: string) =>
+    api.patch(`/contributions/${id}/review`, { decision, adminNote })
+      .then((r) => r.data.data ?? r.data),
+};
+
 export default api;

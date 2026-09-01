@@ -25,6 +25,8 @@ function formatEventDate(iso: string) {
 }
 
 function eventIcon(type: string): keyof typeof Ionicons.glyphMap {
+  if (type.includes('BARCODE')) return 'barcode-outline';
+  if (type.includes('MARKET_LISTING')) return 'storefront-outline';
   if (type.includes('VERIFY_CORRECT')) return 'checkmark-circle';
   if (type.includes('VERIFY_INCORRECT')) return 'close-circle';
   if (type.includes('SUBMIT_APPROVED') || type.includes('AUTO')) return 'ribbon';
@@ -61,7 +63,9 @@ function ReputationWidget({ data }: { data: ReputationProfile }) {
             <View style={[rw.progressFill, { width: `${data.progressPercent}%` }]} />
           </View>
           <Text style={rw.progressHint}>
-            {data.nextLevel} seviyesine %{data.progressPercent} — {data.levelPerk}
+            {data.progressPercent === 0
+              ? `${data.nextLevel} seviyesine ulaşmak için ilk katkını yap — ${data.levelPerk}`
+              : `${data.nextLevel} seviyesine %${data.progressPercent} — ${data.levelPerk}`}
           </Text>
         </View>
       )}
@@ -125,6 +129,46 @@ function QuickActionsPanel() {
             <Text style={[qa.btnTxt, qa.btnTxtPrimary]}>Ürün Ara</Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={[qa.card, qa.cardSubmit]}>
+        <View style={qa.cardHead}>
+          <View style={[qa.iconWrap, { backgroundColor: '#dbeafe' }]}>
+            <Ionicons name="barcode-outline" size={20} color="#2563eb" />
+          </View>
+          <View style={qa.cardText}>
+            <Text style={qa.cardTitle}>Barkod Ekle</Text>
+            <Text style={qa.cardSub}>Barkodsuz ürüne barkod öner (+0.10, onay +0.35)</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={[qa.btn, { backgroundColor: '#2563eb', flex: 1 }]}
+          onPress={() => router.push({ pathname: '/(tabs)/search' })}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="search-outline" size={16} color="#fff" />
+          <Text style={[qa.btnTxt, qa.btnTxtPrimary]}>Ürün Bul & Barkod Tara</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={[qa.card, { backgroundColor: '#ecfdf5', borderColor: '#bbf7d0', borderWidth: 1 }]}>
+        <View style={qa.cardHead}>
+          <View style={[qa.iconWrap, { backgroundColor: '#d1fae5' }]}>
+            <Ionicons name="storefront-outline" size={20} color="#047857" />
+          </View>
+          <View style={qa.cardText}>
+            <Text style={qa.cardTitle}>Markete Ürün Ekle</Text>
+            <Text style={qa.cardSub}>Barkod tara → market + fiyat bildir (+0.40 onay)</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={[qa.btn, { backgroundColor: '#059669', flex: 1 }]}
+          onPress={() => router.push({ pathname: '/scan', params: { intent: 'market-listing' } })}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="scan-outline" size={16} color="#fff" />
+          <Text style={[qa.btnTxt, qa.btnTxtPrimary]}>Barkod Tara & Markete Ekle</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={[qa.card, qa.cardSubmit]}>
@@ -257,6 +301,9 @@ export function ContributionSection() {
 
           <View style={cs.activityHeader}>
             <Text style={cs.activityTitle}>Son Aktiviteler</Text>
+            <TouchableOpacity onPress={() => router.push('/contributions/mine')} activeOpacity={0.7}>
+              <Text style={cs.seeAll}>Katkılarım →</Text>
+            </TouchableOpacity>
           </View>
           <ActivityFeed events={data.recentEvents} />
 
@@ -277,8 +324,9 @@ const cs = StyleSheet.create({
   sectionSub: { fontSize: 12, color: '#64748b', marginTop: 2 },
   loading: { padding: 32, alignItems: 'center' },
   errorTxt: { color: '#64748b', fontSize: 13 },
-  activityHeader: { marginBottom: 8 },
+  activityHeader: { marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   activityTitle: { fontSize: 14, fontWeight: '700', color: '#374151' },
+  seeAll: { fontSize: 12, fontWeight: '700', color: '#7c3aed' },
   tipsCard: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
     backgroundColor: '#faf5ff', borderRadius: 12, padding: 12, marginTop: 12,

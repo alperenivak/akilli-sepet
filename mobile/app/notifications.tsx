@@ -1,114 +1,259 @@
-// Kullanici bildirimleri — ihbar durum guncellemeleri
-import React from 'react';
+// =====================================================
+// Akıllı Sepet — Bildirim Merkezi
+// Tüm bildirim tipleri: fiyat düşüşü, ihbar, katalog, AI
+// =====================================================
+
+import React, { useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet,
-  ActivityIndicator, TouchableOpacity,
+  ActivityIndicator, TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
-import { getMyReports } from '../src/api/reports';
-import { Report } from '../src/types/api';
-import { COLORS, REPORT_STATUS_LABELS, REPORT_STATUS_COLORS } from '../src/utils/constants';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getMyNotifications, markNotificationsRead, AppNotification } from '../src/api/notifications';
+import { useAuthStore } from '../src/store/authStore';
+import { COLORS } from '../src/utils/constants';
 
-const STATUS_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  PENDING: 'time-outline',
-  UNDER_REVIEW: 'search-outline',
-  APPROVED: 'checkmark-circle-outline',
-  REJECTED: 'close-circle-outline',
-  RESOLVED: 'checkmark-done-outline',
+// ── Bildirim tipi konfigürasyonu ──────────────────────
+const TYPE_CONFIG: Record<AppNotification['type'], {
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  bg: string;
+  label: string;
+}> = {
+  PRICE_DROP: {
+    icon: 'trending-down',
+    color: '#16a34a',
+    bg: '#f0fdf4',
+    label: 'Fiyat Düştü',
+  },
+  PRICE_ALERT: {
+    icon: 'notifications',
+    color: '#2563eb',
+    bg: '#eff6ff',
+    label: 'Fiyat Alarmı',
+  },
+  REPORT_STATUS: {
+    icon: 'document-text',
+    color: '#ea580c',
+    bg: '#fff7ed',
+    label: 'İhbar Güncellendi',
+  },
+  NEW_CATALOG: {
+    icon: 'book',
+    color: '#7c3aed',
+    bg: '#f5f3ff',
+    label: 'Yeni Katalog',
+  },
+  AI_RECOMMENDATION: {
+    icon: 'sparkles',
+    color: '#0891b2',
+    bg: '#ecfeff',
+    label: 'Akıllı Öneri',
+  },
+  SYSTEM: {
+    icon: 'settings',
+    color: '#64748b',
+    bg: '#f8fafc',
+    label: 'Sistem',
+  },
 };
 
-const STATUS_MESSAGES: Record<string, string> = {
-  PENDING: 'İhbarınız alındı ve inceleme bekliyor.',
-  UNDER_REVIEW: 'İhbarınız yetkili tarafından inceleniyor.',
-  APPROVED: 'İhbarınız onaylandı. Teşekkürler!',
-  REJECTED: 'İhbarınız incelendi ancak onaylanmadı.',
-  RESOLVED: 'İhbarınız çözüme kavuşturuldu.',
-};
+// ── Zaman formatla ────────────────────────────────────
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'Az önce';
+  if (mins < 60) return `${mins} dakika önce`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs} saat önce`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7)  return `${days} gün önce`;
+  return new Date(dateStr).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+}
 
+// ── Bildirim kartı ────────────────────────────────────
+function NotificationCard({
+  item,
+  onPress,
+}: {
+  item: AppNotification;
+  onPress: (n: AppNotification) => void;
+}) {
+  const cfg = TYPE_CONFIG[item.type] ?? TYPE_CONFIG.SYSTEM;
+
+  return (
+    <TouchableOpacity
+      style={[styles.card, !item.isRead && styles.cardUnread]}
+      onPress={() => onPress(item)}
+      activeOpacity={0.75}
+    >
+      {/* Sol: ikon */}
+      <View style={[styles.iconWrap, { backgroundColor: cfg.bg }]}>
+        <Ionicons name={cfg.icon} size={22} color={cfg.color} />
+      </View>
+
+      {/* İçerik */}
+      <View style={styles.cardContent}>
+        <View style={styles.cardTopRow}>
+          <View style={[styles.typeBadge, { backgroundColor: cfg.bg }]}>
+            <Text style={[styles.typeBadgeText, { color: cfg.color }]}>{cfg.label}</Text>
+          </View>
+          <Text style={styles.timeText}>{timeAgo(item.createdAt)}</Text>
+        </View>
+
+        <Text style={[styles.cardTitle, !item.isRead && styles.cardTitleUnread]} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text style={styles.cardBody} numberOfLines={2}>
+          {item.body}
+        </Text>
+      </View>
+
+      {/* Okunmamış nokta */}
+      {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: cfg.color }]} />}
+    </TouchableOpacity>
+  );
+}
+
+// ── Ana ekran ─────────────────────────────────────────
 export default function NotificationsScreen() {
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['my-reports-notifications'],
-    queryFn: () => getMyReports(1, 50),
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => getMyNotifications(1, 50),
+    enabled: isAuthenticated,
+    staleTime: 30_000,
   });
 
-  const reports = (data?.items ?? []).slice().sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  const markRead = useMutation({
+    mutationFn: (ids?: string[]) => markNotificationsRead(ids),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
+  const handlePress = useCallback((n: AppNotification) => {
+    if (!n.isRead) {
+      markRead.mutate([n.id]);
+    }
+    // Tipe göre yönlendirme
+    if (n.type === 'REPORT_STATUS' && n.data?.reportId) {
+      router.push('/reports/create' as any);
+    } else if (n.type === 'PRICE_DROP' && n.data?.productId) {
+      router.push(`/product/${n.data.productId}` as any);
+    } else if (n.type === 'NEW_CATALOG') {
+      router.push('/markets' as any);
+    }
+  }, [markRead]);
+
+  const handleMarkAllRead = () => {
+    markRead.mutate(undefined);
+  };
+
+  const notifications = data?.items ?? [];
+  const unreadCount   = data?.unreadCount ?? 0;
+
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <Stack.Screen options={{ title: 'Bildirimler' }} />
+        <View style={styles.center}>
+          <Ionicons name="lock-closed-outline" size={56} color={COLORS.border} />
+          <Text style={styles.emptyTitle}>Giriş Gerekli</Text>
+          <Text style={styles.emptySubtitle}>Bildirimlerinizi görmek için giriş yapın</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/auth/login' as any)}>
+            <Text style={styles.actionBtnText}>Giriş Yap</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
-      <Stack.Screen options={{ title: 'Bildirimler', headerBackTitle: 'Profil' }} />
+      <Stack.Screen
+        options={{
+          title: 'Bildirimler',
+          headerBackTitle: 'Profil',
+          headerRight: unreadCount > 0
+            ? () => (
+                <TouchableOpacity onPress={handleMarkAllRead} style={{ marginRight: 16 }}>
+                  <Text style={{ color: COLORS.primary, fontSize: 13, fontWeight: '700' }}>
+                    Tümünü Oku
+                  </Text>
+                </TouchableOpacity>
+              )
+            : undefined,
+        }}
+      />
 
-      {isLoading && (
+      {/* Üst özet */}
+      {unreadCount > 0 && (
+        <View style={styles.summaryBar}>
+          <Ionicons name="notifications" size={16} color={COLORS.primary} />
+          <Text style={styles.summaryText}>
+            <Text style={{ fontWeight: '800' }}>{unreadCount}</Text> okunmamış bildirim
+          </Text>
+        </View>
+      )}
+
+      {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Bildirimler yükleniyor…</Text>
         </View>
-      )}
-
-      {!isLoading && isError && (
+      ) : isError ? (
         <View style={styles.center}>
           <Ionicons name="cloud-offline-outline" size={56} color={COLORS.border} />
-          <Text style={styles.emptyTitle}>Bildirimler yüklenemedi</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
-            <Text style={styles.retryBtnText}>Tekrar Dene</Text>
+          <Text style={styles.emptyTitle}>Yüklenemedi</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => refetch()}>
+            <Text style={styles.actionBtnText}>Tekrar Dene</Text>
           </TouchableOpacity>
         </View>
-      )}
-
-      {!isLoading && !isError && reports.length === 0 && (
+      ) : notifications.length === 0 ? (
         <View style={styles.center}>
-          <Ionicons name="notifications-outline" size={56} color={COLORS.border} />
-          <Text style={styles.emptyTitle}>Henüz bildirim yok</Text>
+          <View style={styles.emptyIconWrap}>
+            <Ionicons name="notifications-outline" size={40} color={COLORS.primary} />
+          </View>
+          <Text style={styles.emptyTitle}>Henüz Bildirim Yok</Text>
           <Text style={styles.emptySubtitle}>
-            İhbarlarınızın durumu değiştiğinde burada görünecek
+            Fiyat düşüşleri, ihbar güncellemeleri ve özel teklifler burada görünecek
           </Text>
-          <TouchableOpacity
-            style={styles.retryBtn}
-            onPress={() => router.push('/reports/create')}
-          >
-            <Text style={styles.retryBtnText}>İhbar Oluştur</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
-      {!isLoading && !isError && reports.length > 0 && (
+          {/* Bildirim tipleri tanıtım */}
+          <View style={styles.typeGrid}>
+            {Object.entries(TYPE_CONFIG).map(([key, cfg]) => (
+              <View key={key} style={[styles.typeChip, { backgroundColor: cfg.bg }]}>
+                <Ionicons name={cfg.icon} size={14} color={cfg.color} />
+                <Text style={[styles.typeChipText, { color: cfg.color }]}>{cfg.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : (
         <FlatList
-          data={reports}
+          data={notifications}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }: { item: Report }) => {
-            const color = REPORT_STATUS_COLORS[item.status] ?? COLORS.textMuted;
-            const icon = STATUS_ICONS[item.status] ?? 'notifications-outline';
-            const message = STATUS_MESSAGES[item.status] ?? '';
-            return (
-              <View style={[styles.card, { borderLeftColor: color }]}>
-                <View style={[styles.iconWrap, { backgroundColor: color + '18' }]}>
-                  <Ionicons name={icon} size={22} color={color} />
-                </View>
-                <View style={styles.cardBody}>
-                  <View style={styles.cardRow}>
-                    <Text style={[styles.statusLabel, { color }]}>
-                      {REPORT_STATUS_LABELS[item.status]}
-                    </Text>
-                    <Text style={styles.date}>
-                      {new Date(item.createdAt).toLocaleDateString('tr-TR')}
-                    </Text>
-                  </View>
-                  <Text style={styles.message}>{message}</Text>
-                  <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
-                  {item.userNote ? (
-                    <View style={styles.adminNote}>
-                      <Ionicons name="information-circle-outline" size={13} color={COLORS.primary} />
-                      <Text style={styles.adminNoteText}>{item.userNote}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            );
-          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={refetch}
+              tintColor={COLORS.primary}
+            />
+          }
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          renderItem={({ item }) => (
+            <NotificationCard item={item} onPress={handlePress} />
+          )}
+          ListFooterComponent={
+            notifications.length > 0 ? (
+              <Text style={styles.footerText}>{notifications.length} bildirim</Text>
+            ) : null
+          }
         />
       )}
     </SafeAreaView>
@@ -116,54 +261,125 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, padding: 32 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text },
-  emptySubtitle: { fontSize: 13, color: COLORS.textMuted, textAlign: 'center', lineHeight: 20 },
-  retryBtn: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 20,
+  safe: { flex: 1, backgroundColor: '#f8fafc' },
+
+  summaryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: `${COLORS.primary}20`,
   },
-  retryBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 14 },
-  list: { padding: 14, gap: 10 },
+  summaryText: { fontSize: 13, color: COLORS.primary },
+
+  list: { padding: 14, paddingBottom: 32 },
+  separator: { height: 8 },
+
   card: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
     backgroundColor: COLORS.white,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
-    borderLeftWidth: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
   },
+  cardUnread: {
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+    backgroundColor: '#fafbff',
+  },
+
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 0,
   },
-  cardBody: { flex: 1 },
-  cardRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  statusLabel: { fontSize: 12, fontWeight: '700' },
-  date: { fontSize: 11, color: COLORS.textMuted },
-  message: { fontSize: 13, color: COLORS.text, marginBottom: 4, lineHeight: 18 },
-  description: { fontSize: 12, color: COLORS.textMuted, lineHeight: 16 },
-  adminNote: {
+  cardContent: { flex: 1 },
+  cardTopRow: {
     flexDirection: 'row',
-    gap: 5,
-    alignItems: 'flex-start',
-    marginTop: 6,
-    backgroundColor: COLORS.primaryLight ?? '#EEF2FF',
-    padding: 7,
-    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
-  adminNoteText: { flex: 1, fontSize: 12, color: COLORS.primary },
+  typeBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 20,
+  },
+  typeBadgeText: { fontSize: 10, fontWeight: '700' },
+  timeText: { fontSize: 10, color: COLORS.textMuted },
+
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 3,
+  },
+  cardTitleUnread: { fontWeight: '800' },
+  cardBody: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    lineHeight: 17,
+  },
+
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
+    marginTop: 4,
+  },
+
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
+  emptyIconWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text, textAlign: 'center' },
+  emptySubtitle: { fontSize: 13, color: COLORS.textMuted, textAlign: 'center', lineHeight: 19, maxWidth: 280 },
+  typeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginTop: 16,
+    paddingHorizontal: 8,
+  },
+  typeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  typeChipText: { fontSize: 11, fontWeight: '700' },
+
+  actionBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  actionBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 14 },
+
+  loadingText: { fontSize: 13, color: COLORS.textMuted, marginTop: 8 },
+  footerText: { textAlign: 'center', fontSize: 12, color: COLORS.textMuted, marginTop: 16 },
 });

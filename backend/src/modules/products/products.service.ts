@@ -17,12 +17,16 @@ import {
   buildCategoryTree, resolveCategoryFilterIds, type CategoryRow,
 } from './category.helper';
 import { classifyProduct } from './category-classifier';
+import { OpenFoodFactsService } from './openfoodfacts.service';
 
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly off: OpenFoodFactsService,
+  ) {}
 
   // ---- Urun Listele (Arama + Filtre + Sayfalama + Siralama) ----
   async findAll(filter: ProductFilterDto) {
@@ -239,6 +243,7 @@ export class ProductsService {
   // ---- Barkod ile Urun Bul (yalnizca yerel DB) ----
   // Harici kaynak: DATA_SYNC_EXTERNAL_PROVIDERS_ENABLED=true + connector gerekir
   async findByBarcode(code: string) {
+    // ── 1. Önce kendi veritabanımıza bak ─────────────
     const barcode = await this.prisma.barcode.findUnique({
       where: { code },
       include: {
@@ -260,7 +265,85 @@ export class ProductsService {
 
     if (barcode) return barcode.product;
 
-    throw new NotFoundException(`"${code}" barkoduna ait urun bulunamadi`);
+    // ── 2. DB'de yok → Open Food Facts'e sor ─────────
+    this.logger.log(`Barkod DB'de yok, Open Food Facts sorgulanıyor: ${code}`);
+    const offData = await this.off.lookup(code);
+
+    if (!offData) {
+      throw new NotFoundException(
+        `"${code}" barkoduna ait ürün bulunamadı (yerel DB ve Open Food Facts kontrol edildi)`,
+      );
+    }
+
+    // ── 3. OFF'tan gelen ürünü DB'ye kaydet ──────────
+    const categoryId = await this.resolveOFFCategory(offData.categoriesRaw);
+
+    const newProduct = await this.prisma.product.create({
+      data: {
+        name:     offData.name,
+        brand:    offData.brand ?? undefined,
+        imageUrl: offData.imageUrl ?? undefined,
+        unit:     this.parseUnit(offData.quantity),
+        isActive: true,
+        categoryId,
+        barcodes: {
+          create: { code, format: 'EAN_13' },
+        },
+      },
+      include: {
+        category: true,
+        barcodes: true,
+        prices: {
+          where: { isAvailable: true },
+          include: {
+            market: { select: { id: true, name: true, logoUrl: true, brandColor: true } },
+          },
+          orderBy: { amount: 'asc' },
+        },
+      },
+    });
+
+    this.logger.log(
+      `Open Food Facts → yeni ürün oluşturuldu: "${newProduct.name}" (${code})`,
+    );
+    return newProduct;
+  }
+
+  /** OFF kategori tag'lerini DB'deki kategori id'sine çevirir; yoksa "Diğer" kullanır */
+  private async resolveOFFCategory(tags: string[]): Promise<string> {
+    const hint = OpenFoodFactsService.mapCategoryHint(tags);
+
+    // İsim eşleşmesi dene
+    const match = await this.prisma.category.findFirst({
+      where: { name: { contains: hint.split(' ')[0], mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (match) return match.id;
+
+    // "Diğer" veya ilk kategoriyi fallback olarak kullan
+    const fallback = await this.prisma.category.findFirst({
+      where: {
+        OR: [
+          { name: { contains: 'Diğer', mode: 'insensitive' } },
+          { name: { contains: 'Genel', mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (fallback) return fallback.id;
+
+    // Son çare: DB'deki ilk kategori
+    const first = await this.prisma.category.findFirst({ select: { id: true } });
+    if (first) return first.id;
+
+    throw new Error('Veritabanında hiç kategori yok. Önce kategori verisini import edin.');
+  }
+
+  /** "1 L", "350 g", "500 ml" → birim çıkar */
+  private parseUnit(quantity: string | null): string | undefined {
+    if (!quantity) return undefined;
+    const m = quantity.match(/\b(ml|l|g|kg|cl|adet)\b/i);
+    return m ? m[1].toLowerCase() : undefined;
   }
 
   // ---- Kategori Oneri Analizi (Admin / Market Yoneticisi) ----
@@ -370,7 +453,7 @@ export class ProductsService {
     const now = new Date();
     const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    const [total, active, sktNearby30] = await Promise.all([
+    const [total, active, sktNearby30, withBarcode] = await Promise.all([
       this.prisma.product.count(),
       this.prisma.product.count({ where: { isActive: true } }),
       this.prisma.product.count({
@@ -382,9 +465,19 @@ export class ProductsService {
           },
         },
       }),
+      this.prisma.product.count({
+        where: { barcodes: { some: {} } },
+      }),
     ]);
 
-    return { total, active, inactive: total - active, sktNearby30 };
+    return {
+      total,
+      active,
+      inactive: total - active,
+      sktNearby30,
+      withBarcode,
+      withoutBarcode: total - withBarcode,
+    };
   }
 
   // ---- Kategorileri Listele ----

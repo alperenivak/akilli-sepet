@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/users',      label: 'Kullanıcılar',      icon: '👥', desc: 'Hesap yönetimi' },
   { href: '/data-sync',   label: 'Veri Yönetimi',     icon: '🔄', desc: 'Import & veri kalitesi' },
   { href: '/submissions', label: 'Fiyat Bildirimleri', icon: '💬', desc: 'Crowdsource onay kuyruğu' },
+  { href: '/contributions', label: 'Ürün Katkıları', icon: '📊', desc: 'Barkod & market listeleme' },
   { href: '/rewards', label: 'Topluluk Ödülleri', icon: '🎁', desc: 'İtibar kuponları' },
   { href: '/catalogs', label: 'Aktüel Kataloglar', icon: '📰', desc: 'Haftalık kampanya katalogları' },
 ];

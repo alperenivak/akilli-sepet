@@ -305,6 +305,7 @@ async function main() {
 
   // Market Yoneticileri
   const marketManagers = [
+    { email: 'yonetici@marketapp.com',     name: 'Market',       surname: 'Yöneticisi', market: migros },
     { email: 'yonetici@migros.com',        name: 'Migros',       surname: 'Yöneticisi', market: migros },
     { email: 'yonetici@a101.com',          name: 'A101',         surname: 'Yöneticisi', market: a101 },
     { email: 'yonetici@bim.com',           name: 'BİM',          surname: 'Yöneticisi', market: bim },

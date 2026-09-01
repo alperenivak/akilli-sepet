@@ -5,7 +5,7 @@
 
 export const REPUTATION_MIN = 0;
 export const REPUTATION_MAX = 5;
-export const REPUTATION_DEFAULT = 1;
+export const REPUTATION_DEFAULT = 0;
 
 /** Olay basina itibar puanlari */
 export const REPUTATION_POINTS = {
@@ -15,6 +15,14 @@ export const REPUTATION_POINTS = {
   SUBMIT_APPROVED: 0.25,
   SUBMIT_REJECTED: -0.2,
   SUBMIT_AUTO_APPROVED: 0.2,
+  /** Barkod katkisi — fiyat dogrulamadan (0.05) daha yuksek */
+  SUBMIT_BARCODE: 0.1,
+  SUBMIT_BARCODE_APPROVED: 0.35,
+  SUBMIT_BARCODE_REJECTED: -0.15,
+  /** Urunu markete ilk ekleme — en yuksek katki odulu */
+  SUBMIT_MARKET_LISTING: 0.12,
+  SUBMIT_MARKET_LISTING_APPROVED: 0.4,
+  SUBMIT_MARKET_LISTING_REJECTED: -0.2,
 } as const;
 
 /** Itibar seviyeleri — mobil ve admin UI */
@@ -49,6 +57,28 @@ export function levelProgressPercent(score: number): number {
   const next = getNextReputationLevel(score);
   if (!next) return 100;
   const range = next.min - current.min;
+  if (range <= 0) return 0;
   const progress = score - current.min;
-  return Math.min(100, Math.round((progress / range) * 100));
+  return Math.min(100, Math.max(0, Math.round((progress / range) * 100)));
+}
+
+/** Katkı yokken eski varsayılan (1.0) skoru gösterme — yeni kullanıcı 0 ile başlar */
+export function hasReputationContribution(input: {
+  eventCount: number;
+  verifications: number;
+  submissions: number;
+  approved: number;
+  rejected: number;
+}): boolean {
+  return (
+    input.eventCount > 0
+    || input.verifications + input.submissions + input.approved + input.rejected > 0
+  );
+}
+
+export function resolveEffectiveReputationScore(
+  storedScore: number,
+  input: Parameters<typeof hasReputationContribution>[0],
+): number {
+  return hasReputationContribution(input) ? storedScore : REPUTATION_DEFAULT;
 }

@@ -6,7 +6,7 @@
 import React from 'react';
 import {
   View, Text, Image, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator,
+  StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
@@ -28,6 +28,7 @@ import {
   computePriceFreshness, freshnessLabel, freshnessColor,
 } from '../../src/utils/priceFreshness';
 import { useViewHistoryStore } from '../../src/store/viewHistoryStore';
+import * as Clipboard from 'expo-clipboard';
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -144,15 +145,32 @@ export default function ProductDetailScreen() {
                 })()}
               </View>
             ) : (
-              <View style={styles.noPriceInfo}>
-                <Ionicons name="pricetag-outline" size={18} color={COLORS.textMuted} />
-                <Text style={styles.noPriceText}>Fiyat bilgisi henüz eklenmemiş</Text>
+              <View style={styles.noPriceBlock}>
+                <View style={styles.noPriceInfo}>
+                  <Ionicons name="pricetag-outline" size={18} color={COLORS.textMuted} />
+                  <Text style={styles.noPriceText}>Bu ürün henüz hiçbir markette listelenmiyor</Text>
+                </View>
+                {isAuthenticated ? (
+                  <TouchableOpacity
+                    style={styles.marketListingBtn}
+                    onPress={() => router.push({
+                      pathname: '/contributions/market-listing',
+                      params: { productId: product.id, productName: product.name },
+                    })}
+                  >
+                    <Ionicons name="storefront" size={18} color="#fff" />
+                    <Text style={styles.marketListingBtnText}>Markete Ekle (+0.40 itibar)</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.loginHint}>Markete eklemek için giriş yapın</Text>
+                )}
               </View>
             )}
+            {prices.length > 0 && (
             <TouchableOpacity
-              style={[styles.addButton, (adding || prices.length === 0) && styles.addButtonDisabled]}
+              style={[styles.addButton, adding && styles.addButtonDisabled]}
               onPress={handleAddToCart}
-              disabled={adding || prices.length === 0}
+              disabled={adding}
               accessibilityLabel="Market seç ve sepete ekle"
               accessibilityRole="button"
             >
@@ -161,6 +179,7 @@ export default function ProductDetailScreen() {
                 {adding ? 'Ekleniyor...' : 'Market Seç & Ekle'}
               </Text>
             </TouchableOpacity>
+            )}
           </View>
 
           <ProductPriceAlertBox
@@ -205,6 +224,21 @@ export default function ProductDetailScreen() {
                 </TouchableOpacity>
               )}
             </View>
+            {isAuthenticated && (
+              <TouchableOpacity
+                style={styles.marketListingLink}
+                onPress={() => router.push({
+                  pathname: '/contributions/market-listing',
+                  params: { productId: product.id, productName: product.name },
+                })}
+              >
+                <Ionicons name="storefront-outline" size={16} color={COLORS.secondary} />
+                <Text style={styles.marketListingLinkText}>
+                  Listelenmeyen markete ekle (+0.40 itibar)
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            )}
             {isAuthenticated && (
               <Text style={styles.compareHint}>
                 Doğru/Yanlış ile fiyat güvenilirliğini artır. Yanlış fiyatları bildirerek sistemi koru.
@@ -307,18 +341,92 @@ export default function ProductDetailScreen() {
           </View>
         )}
 
-        {product.barcodes && product.barcodes.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Barkodlar</Text>
-            {product.barcodes.map((bc) => (
-              <View key={bc.id} style={styles.barcodeRow}>
-                <Ionicons name="barcode-outline" size={16} color={COLORS.textMuted} />
-                <Text style={styles.barcodeText}>{bc.code}</Text>
-                <Text style={styles.barcodeFormat}>{bc.format}</Text>
+        {/* ── Barkod Bölümü ─────────────────────────── */}
+        <View style={styles.card}>
+          <View style={styles.barcodeHeader}>
+            <View style={styles.barcodeTitleRow}>
+              <Ionicons name="barcode-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Barkod Bilgisi</Text>
+            </View>
+            {product.barcodes && product.barcodes.length > 0 && (
+              <View style={styles.barcodeCountBadge}>
+                <Text style={styles.barcodeCountText}>{product.barcodes.length} adet</Text>
               </View>
-            ))}
+            )}
           </View>
-        )}
+
+          {(!product.barcodes || product.barcodes.length === 0) ? (
+            /* Barkod yok durumu */
+            <View style={styles.barcodeEmpty}>
+              <Ionicons name="barcode-outline" size={40} color={COLORS.border} />
+              <Text style={styles.barcodeEmptyTitle}>Barkod Henüz Eklenmemiş</Text>
+              <Text style={styles.barcodeEmptyHint}>
+                Bu ürünü markette bulduysan barkodunu taratarak sisteme ekleyebilirsin.
+                Onaylandığında +0.35 itibar kazanırsın.
+              </Text>
+              <TouchableOpacity
+                style={styles.scanBarcodeBtn}
+                onPress={() => {
+                  if (!isAuthenticated) {
+                    showAppError('Giriş gerekli', 'Barkod eklemek için giriş yapın');
+                    router.push('/(auth)/login');
+                    return;
+                  }
+                  router.push({
+                    pathname: '/scan',
+                    params: {
+                      intent: 'barcode',
+                      productId: product.id,
+                      productName: product.name,
+                    },
+                  });
+                }}
+              >
+                <Ionicons name="scan" size={18} color="#fff" />
+                <Text style={styles.scanBarcodeBtnText}>Barkod Tara & Ekle</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            product.barcodes.map((bc, idx) => (
+              <View key={bc.id} style={[
+                styles.barcodeCard,
+                idx < product.barcodes!.length - 1 && styles.barcodeCardBorder,
+              ]}>
+                {/* Barkod görsel temsili */}
+                <View style={styles.barcodeVisual}>
+                  <Text style={styles.barcodeLines} numberOfLines={1}>
+                    {'|' + bc.code.split('').map((d, i) =>
+                      (i % 3 === 0 ? '██' : i % 3 === 1 ? '█ ' : '│ ')
+                    ).join('')}
+                  </Text>
+                </View>
+
+                {/* Kod + Format + Kopyala */}
+                <View style={styles.barcodeBottom}>
+                  <View style={styles.barcodeInfo}>
+                    <Text style={styles.barcodeCode}>{bc.code}</Text>
+                    <View style={styles.barcodeFormatBadge}>
+                      <Text style={styles.barcodeFormatText}>
+                        {bc.format?.replace('_', '-') ?? 'EAN-13'}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.copyButton}
+                    onPress={async () => {
+                      await Clipboard.setStringAsync(bc.code);
+                      Alert.alert('Kopyalandı', `${bc.code} panoya kopyalandı`);
+                    }}
+                    accessibilityLabel="Barkodu kopyala"
+                  >
+                    <Ionicons name="copy-outline" size={16} color={COLORS.primary} />
+                    <Text style={styles.copyButtonText}>Kopyala</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
 
         <TouchableOpacity
           style={styles.reportButton}
@@ -398,7 +506,14 @@ const styles = StyleSheet.create({
   bestPriceMarket: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
   freshnessHint: { fontSize: 11, fontWeight: '600', marginTop: 4 },
   noPriceInfo: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
-  noPriceText: { fontSize: 13, color: COLORS.textMuted, flex: 1 },
+  noPriceBlock: { flex: 1, gap: 10 },
+  noPriceText: { fontSize: 13, color: COLORS.textMuted, flex: 1, lineHeight: 18 },
+  marketListingBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.secondary, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10,
+  },
+  marketListingBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  loginHint: { fontSize: 12, color: COLORS.textMuted, fontStyle: 'italic' },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -473,6 +588,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20,
   },
   submitPriceBtnText: { fontSize: 12, color: COLORS.primary, fontWeight: '700' },
+  marketListingLink: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#ecfdf5', padding: 12, borderRadius: 10, marginBottom: 12,
+    borderWidth: 1, borderColor: '#bbf7d0',
+  },
+  marketListingLinkText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#047857' },
   marketRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   verifyBar: {
     flexDirection: 'row',
@@ -528,9 +649,44 @@ const styles = StyleSheet.create({
   reliabilityTextYellow: { color: '#854D0E' },
   reliabilityTextOrange: { color: '#9A3412' },
   reliabilityTextGray: { color: '#6B7280' },
-  barcodeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
-  barcodeText: { flex: 1, fontSize: 13, color: COLORS.text, fontFamily: 'monospace' },
-  barcodeFormat: { fontSize: 11, color: COLORS.textMuted },
+  barcodeHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12,
+  },
+  barcodeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  barcodeCountBadge: {
+    backgroundColor: COLORS.primaryLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12,
+  },
+  barcodeCountText: { fontSize: 11, color: COLORS.primary, fontWeight: '700' },
+  barcodeEmpty: { alignItems: 'center', paddingVertical: 24, gap: 8 },
+  barcodeEmptyTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textMuted, marginTop: 4 },
+  barcodeEmptyHint: { fontSize: 12, color: COLORS.textMuted, textAlign: 'center', lineHeight: 18, paddingHorizontal: 16 },
+  scanBarcodeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12,
+    backgroundColor: COLORS.primary, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10,
+  },
+  scanBarcodeBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  barcodeCard: { paddingVertical: 12 },
+  barcodeCardBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  barcodeVisual: {
+    backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
+    marginBottom: 10, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border,
+  },
+  barcodeLines: {
+    fontSize: 11, color: '#1e293b', letterSpacing: 1, fontFamily: 'monospace',
+    textAlign: 'center',
+  },
+  barcodeBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  barcodeInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  barcodeCode: { fontSize: 14, color: COLORS.text, fontFamily: 'monospace', fontWeight: '600' },
+  barcodeFormatBadge: {
+    backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+  },
+  barcodeFormatText: { fontSize: 10, color: '#0369A1', fontWeight: '700' },
+  copyButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: COLORS.primaryLight, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+  },
+  copyButtonText: { fontSize: 12, color: COLORS.primary, fontWeight: '700' },
   reportButton: {
     flexDirection: 'row',
     alignItems: 'center',

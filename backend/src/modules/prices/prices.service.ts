@@ -427,7 +427,7 @@ export class PricesService {
       marketId: dto.marketId,
       amount: dto.amount,
       userId,
-      userScore: user?.reputationScore ?? 1,
+      userScore: user?.reputationScore ?? 0,
       isAbnormal,
       productName: product.name,
       marketName: market.name,
