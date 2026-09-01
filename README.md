@@ -13,11 +13,19 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 
+**🏆 Outstanding Project Award — Recognized among the best graduation projects**
+
 **Computer Engineering Graduation Project · Developed by Alperen İVAK**
 
 </div>
 
 ---
+
+## 🏆 Recognition
+
+**Akıllı Sepet received the Outstanding Project Award from Eastern Mediterranean University (EMU/DAÜ), recognizing it among the best graduation projects.**
+
+The recognition reflects the project's combination of a real-world consumer problem, end-to-end software engineering, mobile and backend development, data-driven price intelligence, community participation and a production-oriented system architecture.
 
 ## Overview
 
